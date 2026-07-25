@@ -1252,9 +1252,26 @@ var s = rowSuccess(r);
 if (s !== null) map[key].success += s;
 if (r.kakari) map[key].kakari += 1;
 if (r.speedLevel) {
-if (!map[key].speed[r.speedLevel]) map[key].speed[r.speedLevel] = { success: 0, fail: 0 };
-map[key].speed[r.speedLevel].success += Number(r.success) || 0;
-map[key].speed[r.speedLevel].fail += Number(r.fail) || 0;
+if (!map[key].speed[r.speedLevel]) map[key].speed[r.speedLevel] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 };
+var sd = map[key].speed[r.speedLevel];
+if (r.reps === undefined) {
+// 旧データ(reps列なし)は成功/失敗の集計をそのまま使う
+sd.success += Number(r.success) || 0;
+sd.fail += Number(r.fail) || 0;
+} else {
+var repsForSpeed = Number(r.reps) || 0;
+if (r.result === "success") {
+sd.success += repsForSpeed;
+} else if (r.result === "fail") {
+sd.fail += repsForSpeed;
+} else if (r.result === "yure") {
+sd.yure += repsForSpeed;
+var maxSeverity = (r.wobbleDetail || []).reduce(function (m, w) { return Math.max(m, Number(w.severity) || 0); }, 0);
+if (maxSeverity >= 3) sd.yureHigh += repsForSpeed;
+else if (maxSeverity >= 1) sd.yureLow += repsForSpeed;
+}
+// result === "" (未選択) はスピード別の成功率/ヨレ率の集計には含めない
+}
 }
 });
 });
@@ -1262,26 +1279,52 @@ return Object.keys(map).map(function (k) { return { name: k, count: map[k].count
 }
 function speedTotalsAggregate(totals) {
 var agg = {};
-SPEED_LEVELS.forEach(function (lv) { agg[lv.key] = { success: 0, fail: 0 }; });
+SPEED_LEVELS.forEach(function (lv) { agg[lv.key] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 }; });
 totals.forEach(function (t) {
 SPEED_LEVELS.forEach(function (lv) {
 var d = t.speed[lv.key];
-if (d) { agg[lv.key].success += d.success; agg[lv.key].fail += d.fail; }
+if (d) {
+agg[lv.key].success += d.success;
+agg[lv.key].fail += d.fail;
+agg[lv.key].yure += d.yure || 0;
+agg[lv.key].yureLow += d.yureLow || 0;
+agg[lv.key].yureHigh += d.yureHigh || 0;
+}
 });
 });
 return agg;
 }
+/* 進入スピード別の内訳バー。成功(氷色)/失敗(赤)/ヨレ(琥珀)で積み上げ表示し、ヨレはさらに強さ1〜2(浅め)/3〜5(深め)の内訳も添える。 */
 function renderSpeedBreakdownHtml(speedMap) {
 return SPEED_LEVELS.map(function (lv) {
-var d = speedMap[lv.key] || { success: 0, fail: 0 };
-var total = d.success + d.fail;
+var d = speedMap[lv.key] || { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 };
+var yure = d.yure || 0;
+var yureLow = d.yureLow || 0;
+var yureHigh = d.yureHigh || 0;
+var total = d.success + d.fail + yure;
 var rate = total > 0 ? Math.round((d.success / total) * 100) : null;
-var pct = total > 0 ? Math.round((d.success / total) * 100) : 0;
-return '<div class="speed-detail-row" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+var yureRate = total > 0 ? Math.round((yure / total) * 100) : null;
+var successPct = total > 0 ? (d.success / total) * 100 : 0;
+var failPct = total > 0 ? (d.fail / total) * 100 : 0;
+var yurePct = total > 0 ? (yure / total) * 100 : 0;
+var barHtml = total > 0
+? '<div style="display:flex;height:100%;width:100%;">' +
+'<div style="width:' + successPct + '%;background:' + COLORS.ice + ';"></div>' +
+'<div style="width:' + failPct + '%;background:#E5484D;"></div>' +
+'<div style="width:' + yurePct + '%;background:' + COLORS.amber + ';"></div>' +
+'</div>'
+: "";
+var rateLabel = rate === null ? "-" : "成功" + rate + "%";
+var yureLabel = (yure > 0 && yureRate !== null) ? " ・ヨレ" + yureRate + "%" : "";
+var unknownSeverity = yure - yureLow - yureHigh;
+var yureDetailHtml = (yure > 0 && (yureLow > 0 || yureHigh > 0))
+? '<div style="font-size:9.5px;color:' + COLORS.textFaint + ';margin:0 0 6px 112px;">ヨレ内訳：浅め(1〜2) ' + yureLow + '件 ・ 深め(3〜5) ' + yureHigh + '件' + (unknownSeverity > 0 ? ' ・評価なし ' + unknownSeverity + '件' : '') + '</div>'
+: "";
+return '<div class="speed-detail-row" style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">' +
 '<div style="font-size:10.5px;width:104px;flex-shrink:0;color:#C7D6E5;">' + escHtml(lv.label) + (lv.hint ? '（' + escHtml(lv.hint) + '）' : '') + '</div>' +
-'<div style="flex:1;height:7px;border-radius:4px;background:#1B2C42;overflow:hidden;"><div style="height:100%;border-radius:4px;width:' + pct + '%;background:' + lv.color + ';"></div></div>' +
-'<div style="font-size:10px;font-family:ui-monospace,monospace;width:64px;text-align:right;flex-shrink:0;color:#8CA0B8;">' + (rate === null ? "-" : rate + "%") + " " + d.success + "/" + total + '</div>' +
-"</div>";
+'<div style="flex:1;height:7px;border-radius:4px;background:#1B2C42;overflow:hidden;">' + barHtml + '</div>' +
+'<div style="font-size:9.5px;font-family:ui-monospace,monospace;width:150px;text-align:right;flex-shrink:0;color:#8CA0B8;">' + rateLabel + yureLabel + " " + total + "本" + '</div>' +
+"</div>" + yureDetailHtml;
 }).join("");
 }
 function daysByCategory(athleteId) {
@@ -1582,7 +1625,7 @@ var trate = isWater && t.count > 0 ? Math.round((t.success / t.count) * 100) : n
 var countLabel = isWater ? (t.success + "/" + t.count + "本") : (t.count + "本");
 var countCap = isWater ? '<span class="rank-count-cap">成功/本数</span>' : "";
 var kakariLabel = (!isWater && t.kakari > 0) ? " ・かかり×" + t.kakari : "";
-var hasSpeedData = isWater && Object.keys(t.speed).some(function (k) { var d = t.speed[k]; return (d.success + d.fail) > 0; });
+var hasSpeedData = isWater && Object.keys(t.speed).some(function (k) { var d = t.speed[k]; return (d.success + d.fail + (d.yure || 0)) > 0; });
 var rankId = "rank-" + encodeURIComponent(t.name);
 var isOpen = hasSpeedData && !!S.dashRankOpen[rankId];
 var chevron = hasSpeedData ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
@@ -1590,7 +1633,7 @@ var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" 
 var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + renderSpeedBreakdownHtml(t.speed) + "</div>") : "";
 return head + detailHtml;
 }).join("");
-var overallSpeedCard = (isWater && totals.some(function (t) { return Object.keys(t.speed).length > 0; })) ? ('<div class="card"><div class="recent-title">進入スピード別 成功率(全技合算)</div>' + renderSpeedBreakdownHtml(speedTotalsAggregate(totals)) + "</div>") : "";
+var overallSpeedCard = (isWater && totals.some(function (t) { return Object.keys(t.speed).length > 0; })) ? ('<div class="card"><div class="recent-title">進入スピード別 成功率・ヨレ率(全技合算)</div>' + renderSpeedBreakdownHtml(speedTotalsAggregate(totals)) + "</div>") : "";
 
 var recentHtml = (S.dashRecentRange === "recent" ? entries.slice().reverse().slice(0, 6) : entries.filter(function (fe) { return isInDashRange(fe.date, S.dashRecentRange); }).slice().reverse()).map(function (e) {
 var chipsExpanded = !!S.dashChipsExpanded[e.id];
