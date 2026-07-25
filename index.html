@@ -65,6 +65,25 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 
 .add-row-btn { margin-top: 2px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 8px 12px; border-radius: 8px; background: #131F30; border: 1px dashed #26374E; color: #4CC3F0; cursor: pointer; }
 
+.tech-row-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.icon-btn { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #131F30; color: #5C7086; border: none; cursor: pointer; flex-shrink: 0; padding: 0; }
+.icon-btn.collapse-btn { color: #8CA0B8; }
+
+.tech-row.collapsed { padding: 10px 12px; }
+.tech-row-summary { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.tech-row-summary-main { font-size: 13px; font-weight: 600; color: #EAF1F8; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tech-row-summary-sub { font-size: 11px; color: #8CA0B8; flex-shrink: 0; }
+
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper-btn { width: 34px; height: 34px; border-radius: 8px; background: #131F30; border: 1px solid #26374E; color: #4CC3F0; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; padding: 0; line-height: 1; }
+.stepper .num-input { text-align: center; flex: 1; min-width: 0; }
+
+.record-fixed-spacer { height: 74px; }
+.record-fixed-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; gap: 8px; padding: 10px 20px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, rgba(11,20,32,0) 0%, #0B1420 28%); }
+.record-fixed-bar-inner { max-width: 480px; margin: 0 auto; width: 100%; display: flex; gap: 8px; }
+.record-fixed-bar .add-row-btn { margin: 0; flex: 0 0 auto; white-space: nowrap; background: #1B2C42; }
+.record-fixed-bar .save-btn { margin: 0; flex: 1; }
+
 .note-textarea { width: 100%; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #1B2C42; border: 1px solid #26374E; color: #EAF1F8; outline: none; resize: none; }
 
 .tech-note-toggle { margin-top: 6px; }
@@ -644,6 +663,8 @@ return '<svg class="icon ' + (extraClass || "") + '" viewBox="0 0 24 24" width="
 function iconPlus(size, color) { return iconSvg('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', size, color); }
 function iconMinus(size, color) { return iconSvg('<line x1="5" y1="12" x2="19" y2="12"/>', size, color); }
 function iconChevronDown(size, color) { return iconSvg('<polyline points="6 9 12 15 18 9"/>', size, color); }
+function iconChevronUp(size, color) { return iconSvg('<polyline points="18 15 12 9 6 15"/>', size, color); }
+function iconCopy(size, color) { return iconSvg('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', size, color); }
 function iconTrendingUp(size, color) { return iconSvg('<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>', size, color); }
 function iconSave(size, color) { return iconSvg('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>', size, color); }
 function iconUsers(size, color) { return iconSvg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', size, color); }
@@ -777,8 +798,8 @@ render();
 /* ---- app state ---- */
 function emptyTechRow(category) {
 var defaultTrick = (typeof S !== "undefined" && S && S.trickLastUsed && (S.trickLastUsed !== "airtime" || category === "trampoline")) ? S.trickLastUsed : "rot_3";
-if (category === "trampoline") return { rowId: genRowId(), trickId: defaultTrick, modifier: "none", nuki: false, unnatural: false, note: "", shareNote: false, kakari: false, reps: "", videos: [] };
-return { rowId: genRowId(), trickId: defaultTrick, grabCategory: "none", grabType: null, near: null, modifier: "none", nuki: false, unnatural: false, reps: "", result: "", wobbleDetail: [], note: "", shareNote: false, videos: [], speedLevel: "normal" };
+if (category === "trampoline") return { rowId: genRowId(), trickId: defaultTrick, modifier: "none", nuki: false, unnatural: false, note: "", shareNote: false, kakari: false, reps: "", videos: [], _collapsed: false };
+return { rowId: genRowId(), trickId: defaultTrick, grabCategory: "none", grabType: null, near: null, modifier: "none", nuki: false, unnatural: false, reps: "", result: "", wobbleDetail: [], note: "", shareNote: false, videos: [], speedLevel: "normal", _collapsed: false };
 }
 var S = {
 dashRecentRange: "recent",
@@ -861,9 +882,52 @@ render();
 }
 function selectKicker(k) { S.kicker = k; render(); }
 function setNote(v) { S.note = v; }
-function addTechRow() { S.rows.push(emptyTechRow(S.category)); render(); }
+function addTechRow() {
+S.rows.forEach(function (r) { r._collapsed = true; });
+S.rows.push(emptyTechRow(S.category));
+render();
+}
 function removeTechRow(idx) {
 if (S.rows.length > 1) { S.rows = S.rows.filter(function (_, i) { return i !== idx; }); render(); }
+}
+function toggleRowCollapse(idx) { S.rows[idx]._collapsed = !S.rows[idx]._collapsed; render(); }
+function stepReps(idx, delta) {
+var r = S.rows[idx];
+var cur = (r.reps !== "" && r.reps !== undefined) ? Number(r.reps) || 0 : 0;
+var next = cur + delta;
+if (next < 0) next = 0;
+r.reps = String(next);
+render();
+}
+function duplicateTechRow(idx) {
+var src = S.rows[idx];
+var copy = {
+rowId: genRowId(), trickId: src.trickId, grabCategory: src.grabCategory, grabType: src.grabType, near: src.near,
+modifier: src.modifier, nuki: !!src.nuki, unnatural: !!src.unnatural, kakari: !!src.kakari,
+reps: "", result: "", wobbleDetail: [], note: "", shareNote: false, videos: [], speedLevel: src.speedLevel, _collapsed: false,
+};
+src._collapsed = true;
+S.rows.splice(idx + 1, 0, copy);
+render();
+}
+function techRowSummaryText(row) {
+var parts = [trickLabel(row.trickId)];
+if (row.grabCategory === "grab" && row.grabType) {
+var g = GRABS.filter(function (x) { return x.id === row.grabType; })[0];
+parts.push(g ? g.label : row.grabType);
+} else if (row.grabCategory === "position") {
+parts.push("ポジション");
+}
+if (row.nuki) parts.push("抜き");
+if (row.unnatural) parts.push("アンナチュラル");
+var reps = (row.reps !== "" && row.reps !== undefined) ? Number(row.reps) || 0 : null;
+if (reps !== null) parts.push(reps + "本");
+if (row.result === "success") parts.push("成功");
+else if (row.result === "fail") parts.push("失敗");
+else if (row.result === "yure") parts.push("ヨレ");
+var sp = SPEED_LEVELS.filter(function (s) { return s.key === row.speedLevel; })[0];
+if (sp && row.speedLevel && row.speedLevel !== "normal") parts.push(sp.label);
+return parts.join(" ・ ");
 }
 function setRowTrick(idx, v) { S.rows[idx].trickId = v; S.trickUsageCount[v] = (S.trickUsageCount[v] || 0) + 1; S.trickLastUsed = v; render(); }
 function setRowModifier(idx, m) { S.rows[idx].modifier = m; render(); }
@@ -1135,7 +1199,23 @@ renderTrickSelect(idx, row) +
 '</div>');
 }
 
-var countFields = '<div class="num-field"><span class="num-field-label">本数</span><input class="num-input" type="number" inputmode="numeric" placeholder="0" value="' + escAttr(row.reps) + '" oninput="setRowField(' + idx + ",'reps',this.value)\" onblur=\"render()\"></div>";
+if (row._collapsed) {
+return (
+'<div class="tech-row collapsed">' +
+'<div class="tech-row-summary" onclick="toggleRowCollapse(' + idx + ')">' +
+'<span class="tech-row-idx">技 ' + (idx + 1) + '</span>' +
+'<span class="tech-row-summary-main">' + escHtml(techRowSummaryText(row)) + '</span>' +
+'<span class="tech-row-summary-sub">' + iconChevronDown(14, COLORS.textFaint) + '</span>' +
+'</div>' +
+'</div>'
+);
+}
+
+var countFields = '<div class="num-field"><span class="num-field-label">本数</span><div class="stepper">' +
+'<button type="button" class="stepper-btn" onclick="stepReps(' + idx + ',-1)">' + iconMinus(14, COLORS.ice) + '</button>' +
+'<input class="num-input" type="number" inputmode="numeric" placeholder="0" value="' + escAttr(row.reps) + '" oninput="setRowField(' + idx + ",'reps',this.value)\" onblur=\"render()\">" +
+'<button type="button" class="stepper-btn" onclick="stepReps(' + idx + ',1)">' + iconPlus(14, COLORS.ice) + '</button>' +
+'</div></div>';
 var isTrampoline = S.category === "trampoline";
 var modifierChips = isTrampoline ? MODIFIERS.map(function (m) {
 var isGrabLetter = m.id === "G" || m.id === "g";
@@ -1152,7 +1232,11 @@ return (
 (row.nuki ? '<span class="code-badge" style="color:' + COLORS.amber + ';border-color:' + COLORS.amber + ';">抜き</span>' : "") +
 (row.unnatural ? '<span class="code-badge" style="color:' + COLORS.ice + ';border-color:' + COLORS.ice + ';">アンナチュラル</span>' : "") +
 (row.kakari ? '<span class="code-badge">かかり</span>' : "") +
-'<button class="remove-btn" onclick="removeTechRow(' + idx + ')" style="margin-left:auto;">' + iconMinus(14, COLORS.textFaint) + "</button>" +
+'<div class="tech-row-actions">' +
+'<button class="icon-btn" title="複製" onclick="duplicateTechRow(' + idx + ')">' + iconCopy(14, COLORS.textFaint) + '</button>' +
+'<button class="icon-btn collapse-btn" title="折りたたむ" onclick="toggleRowCollapse(' + idx + ')">' + iconChevronUp(14, COLORS.textFaint) + '</button>' +
+'<button class="icon-btn remove-btn" onclick="removeTechRow(' + idx + ')">' + iconMinus(14, COLORS.textFaint) + '</button>' +
+'</div>' +
 "</div>" +
 renderTrickSelect(idx, row) +
 (isTrampoline ? '<div class="inline-row">' + modifierChips + "</div>" : '<div class="sub-label">グラブ・ポジション</div><div class="inline-row">' + modifierChips + "</div>" + renderGrabPickerHtml(idx, row, "setRowGrab", "setRowNear")) +
@@ -1206,6 +1290,12 @@ if (S.saving) saveBtnInner = "保存中…";
 else if (S.savedFlash) saveBtnInner = "保存しました ✓";
 else saveBtnInner = iconSave(16, "#062230") + " 記録を保存";
 
+var fixedBar =
+'<div class="record-fixed-bar"><div class="record-fixed-bar-inner">' +
+'<button class="add-row-btn" onclick="addTechRow()">' + iconPlus(14, COLORS.ice) + " 技を追加 現在" + S.rows.length + "件</button>" +
+'<button class="save-btn ' + (S.savedFlash ? "flash" : "") + '" onclick="saveEntry()" ' + (S.saving ? "disabled" : "") + '>' + saveBtnInner + "</button>" +
+"</div></div>";
+
 return (
 '<div class="section">' +
 '<div><label class="field-label">選手</label>' + athleteSection + "</div>" +
@@ -1213,13 +1303,13 @@ return (
 '<div><label class="field-label">施設</label><div class="select-wrap"><select class="select-input" onchange="selectFacility(this.value)">' + facilityOptions + "</select>" +
 '<span class="select-chevron">' + iconChevronDown(16, COLORS.textFaint) + "</span></div>" +
 '<div class="sub-label">台のサイズ</div><div class="chip-grid">' + kickerChips + "</div></div>" +
-'<div><label class="field-label">技ログ</label><div class="tech-row-list">' + rowsHtml + "</div>" +
-'<button class="add-row-btn" onclick="addTechRow()">' + iconPlus(14, COLORS.ice) + " 技を追加</button></div>" +
+'<div><label class="field-label">技ログ</label><div class="tech-row-list">' + rowsHtml + "</div></div>" +
 '<div><label class="field-label">メモ(任意)</label><textarea class="note-textarea" rows="2" placeholder="感覚、風向き、恐怖心など" oninput="setNote(this.value)">' + escHtml(S.note) + '</textarea><label class="tech-share-check"><input type="checkbox" onchange="S.shareNote=this.checked" ' + (S.shareNote ? "checked" : "") + '> コーチにも共有</label></div>' +
-'<button class="save-btn ' + (S.savedFlash ? "flash" : "") + '" onclick="saveEntry()" ' + (S.saving ? "disabled" : "") + '>' + saveBtnInner + "</button>" +
 (S.bgUpload ? '<div class="save-note">🎬 動画をアップロード中… (' + S.bgUpload.done + '/' + S.bgUpload.total + ')</div>' : "") +
-(S.saveError ? '<div style="color:' + COLORS.amber + ';font-size:12px;margin-top:8px;">' + escHtml(S.saveError) + "</div>" : "") +
-"</div>"
+(S.saveError ? '<div style="color:' + COLORS.amber + ';font-size:12px;margin-top:8px;">' + escHtml(S.saveError) + " 入力内容は保持されています。</div>" : "") +
+'<div class="record-fixed-spacer"></div>' +
+"</div>" +
+fixedBar
 );
 }
 
