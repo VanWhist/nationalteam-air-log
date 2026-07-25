@@ -190,6 +190,18 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .grab-badge { position: absolute; top: 3px; right: 3px; font-size: 8px; font-weight: 700; padding: 0px 4px; border-radius: 999px; }
 .grab-badge-g { background: #F0B429; color: #3a2900; }
 .grab-badge-s { background: #3a5570; color: #EAF1F8; }
+.grab-select-btn { width: 100%; padding: 10px; border-radius: 10px; background: #1B2C42; border: 1px dashed #4CC3F0; color: #4CC3F0; font-size: 12px; font-weight: 600; cursor: pointer; }
+.grab-summary { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: #1B2C42; border: 1px solid #26374E; cursor: pointer; }
+.grab-summary-thumb img { width: 32px; height: 32px; border-radius: 6px; object-fit: contain; background: #ffffff; display: block; }
+.grab-summary-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.grab-summary-name { font-size: 12.5px; font-weight: 600; color: #EAF1F8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grab-summary-change { font-size: 10px; color: #4CC3F0; }
+.grab-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(4,8,14,.75); z-index: 110; align-items: flex-end; justify-content: center; }
+.grab-modal-overlay.open { display: flex; }
+.grab-modal-sheet { width: 100%; max-width: 480px; max-height: 82vh; overflow-y: auto; background: #0F1929; border: 1px solid #26374E; border-radius: 16px 16px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.grab-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: #EAF1F8; }
+.grab-modal-close { background: #1B2C42; border: 1px solid #26374E; color: #EAF1F8; border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.sample-note-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #2A1F0E; border: 1px solid #6B4A1E; color: #FFB870; margin-left: 4px; vertical-align: middle; }
 
 .yure-panel { background: #131F30; border: 1px solid #7a4a1f; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .yure-list-item { background: #1B2C42; border: 1px solid #26374E; border-radius: 8px; padding: 10px; cursor: pointer; }
@@ -849,6 +861,10 @@ videoFilterTrick: "all",
 videoModalUrl: null,
 videoModalCaption: "",
 bgUpload: null,
+grabModalRowIdx: null,
+grabModalEditRowIdx: null,
+dashPeriod: "all",
+dashRankSort: "count",
 };
 var pendingCharts = [];
 
@@ -951,6 +967,8 @@ r.modifier = deriveModifier(r.grabCategory, r.grabType);
 render();
 }
 function setRowNear(idx, v) { var r = S.rows[idx]; r.near = (r.near === v ? null : v); render(); }
+function openGrabModal(idx) { S.grabModalRowIdx = idx; render(); }
+function closeGrabModal() { S.grabModalRowIdx = null; render(); }
 function setRowResult(idx, v) { S.rows[idx].result = (S.rows[idx].result === v ? "" : v); render(); }
 var WOBBLE_TAGS = ["回転ショート", "回転オーバー", "右肩下がり", "左肩下がり", "体の捩れ", "右に飛んだ", "左に飛んだ"];
 function toggleRowWobbleTag(idx, tag) {
@@ -1143,8 +1161,7 @@ return GRAB_CATEGORY_CHOICES.map(function (c) {
 return '<button class="chip-btn ' + (row.grabCategory === c.id ? "active" : "") + '" style="flex:1;font-size:10px;padding:8px 3px;" onclick="' + setterFnName + "(" + idx + ",'" + c.id + "')\">" + escHtml(c.label) + "</button>";
 }).join("");
 }
-function renderGrabPickerHtml(idx, row, grabSetterFnName, nearSetterFnName) {
-if (row.grabCategory !== "grab") return "";
+function renderGrabCardsHtml(row, idx, grabSetterFnName, nearSetterFnName) {
 var cards = GRABS.map(function (g) {
 var selected = row.grabType === g.id;
 if (g.id === "other") {
@@ -1161,7 +1178,36 @@ nearHtml = '<div class="sub-label" style="margin:8px 0 4px;">ニア / レギュ�
 '<button class="chip-btn ' + (row.near === "regular" ? "active" : "") + '" style="flex:1;font-size:10px;padding:8px 3px;" onclick="' + nearSetterFnName + "(" + idx + ",'regular')\">レギュラー</button>" +
 "</div>";
 }
-return '<div class="grab-picker"><div class="sub-label" style="margin-top:0;">グラブ種類（タップで選択）</div><div class="grab-grid">' + cards + "</div>" + nearHtml + "</div>";
+return '<div class="grab-grid">' + cards + "</div>" + nearHtml;
+}
+/* グラブ選択欄：選択済みならサムネイル+名称のコンパクト表示、未選択なら「グラブを選択」ボタン。タップでボトムシート型モーダルを開く。 */
+function renderGrabPickerHtml(idx, row, grabSetterFnName, nearSetterFnName, openModalFnName) {
+if (row.grabCategory !== "grab") return "";
+var selectedG = row.grabType ? GRABS.filter(function (g) { return g.id === row.grabType; })[0] : null;
+if (!selectedG) {
+return '<button type="button" class="grab-select-btn" onclick="' + openModalFnName + "(" + idx + ')">グラブを選択</button>';
+}
+var thumb = selectedG.id === "other" ? '<span class="grab-icon-placeholder" style="width:32px;height:32px;font-size:14px;display:flex;align-items:center;justify-content:center;">？</span>' : '<img src="' + GRAB_ICONS[selectedG.id] + '" alt="' + escAttr(selectedG.label) + '">';
+var nearLabel = row.near === "near" ? "・ニア" : (row.near === "regular" ? "・レギュラー" : "");
+return '<div class="grab-summary" onclick="' + openModalFnName + "(" + idx + ')"><div class="grab-summary-thumb">' + thumb + '</div><div class="grab-summary-text"><span class="grab-summary-name">' + escHtml(selectedG.label) + escHtml(nearLabel) + '</span><span class="grab-summary-change">タップして変更</span></div></div>';
+}
+function renderGrabModalFor(open, row, idx, grabSetterFnName, nearSetterFnName, closeFnName) {
+var body = open ? renderGrabCardsHtml(row, idx, grabSetterFnName, nearSetterFnName) : "";
+return '<div class="grab-modal-overlay' + (open ? " open" : "") + '" onclick="' + closeFnName + '()">' +
+'<div class="grab-modal-sheet" onclick="event.stopPropagation()">' +
+'<div class="grab-modal-header"><span>グラブを選択</span><button type="button" class="grab-modal-close" onclick="' + closeFnName + '()">閉じる</button></div>' +
+body +
+"</div></div>";
+}
+function renderGrabModal() {
+var idx = S.grabModalRowIdx;
+var open = idx !== null && idx !== undefined && !!S.rows[idx];
+return renderGrabModalFor(open, open ? S.rows[idx] : null, idx, "setRowGrab", "setRowNear", "closeGrabModal");
+}
+function renderEditGrabModal() {
+var idx = S.grabModalEditRowIdx;
+var open = idx !== null && idx !== undefined && S.editDraft && !!S.editDraft.rows[idx];
+return renderGrabModalFor(open, open ? S.editDraft.rows[idx] : null, idx, "setEditRowGrab", "setEditRowNear", "closeEditGrabModal");
 }
 function renderResultChipsHtml(idx, row, setterFnName) {
 return (
@@ -1239,7 +1285,7 @@ return (
 '</div>' +
 "</div>" +
 renderTrickSelect(idx, row) +
-(isTrampoline ? '<div class="inline-row">' + modifierChips + "</div>" : '<div class="sub-label">グラブ・ポジション</div><div class="inline-row">' + modifierChips + "</div>" + renderGrabPickerHtml(idx, row, "setRowGrab", "setRowNear")) +
+(isTrampoline ? '<div class="inline-row">' + modifierChips + "</div>" : '<div class="sub-label">グラブ・ポジション</div><div class="inline-row">' + modifierChips + "</div>" + renderGrabPickerHtml(idx, row, "setRowGrab", "setRowNear", "openGrabModal")) +
 (row.modifier === "g" ? '<div class="grab-note">※ g は新基準で追加予定のコード。DD値は未定のためドラフト上は暫定表示です。</div>' : "") +
 '<div class="inline-row">' + nukiChip + unnaturalChip + kakariChip + "</div>" +
 '<div class="sub-label">「抜き」は台の踏切を抜いて飛ぶデュアルモーグル練習用、「アンナチュラル」は通常と逆回転で行う技。どちらもグラブ・ポジション/G/gや、お互いと組み合わせて選択できます。</div>' +
@@ -1336,11 +1382,12 @@ var map = {};
 entries.forEach(function (e) {
 e.rows.forEach(function (r) {
 var key = trickLabel(r.trickId) + (r.nuki ? "（抜き）" : "") + (r.unnatural ? "（アンナチュラル）" : "");
-if (!map[key]) map[key] = { count: 0, success: 0, kakari: 0, speed: {} };
+if (!map[key]) map[key] = { count: 0, success: 0, kakari: 0, speed: {}, lastDate: null };
 map[key].count += rowTotal(r);
 var s = rowSuccess(r);
 if (s !== null) map[key].success += s;
 if (r.kakari) map[key].kakari += 1;
+if (!map[key].lastDate || e.date > map[key].lastDate) map[key].lastDate = e.date;
 if (r.speedLevel) {
 if (!map[key].speed[r.speedLevel]) map[key].speed[r.speedLevel] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 };
 var sd = map[key].speed[r.speedLevel];
@@ -1365,7 +1412,7 @@ else if (maxSeverity >= 1) sd.yureLow += repsForSpeed;
 }
 });
 });
-return Object.keys(map).map(function (k) { return { name: k, count: map[k].count, success: map[k].success, kakari: map[k].kakari, speed: map[k].speed }; }).sort(function (a, b) { return b.count - a.count; });
+return Object.keys(map).map(function (k) { return { name: k, count: map[k].count, success: map[k].success, kakari: map[k].kakari, speed: map[k].speed, lastDate: map[k].lastDate }; }).sort(function (a, b) { return b.count - a.count; });
 }
 function speedTotalsAggregate(totals) {
 var agg = {};
@@ -1679,20 +1726,62 @@ function cycleDashRange() { var order = ["recent", "week", "month", "year"]; var
 function dashRangeLabel(range) { if (range === "week") return "今週"; if (range === "month") return "今月"; if (range === "year") return "今年"; return "直近"; }
 function dashRangeStart(range) { var now = new Date(); if (range === "week") { var day = now.getDay(); var diffToMonday = day === 0 ? 6 : day - 1; return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday); } if (range === "month") { return new Date(now.getFullYear(), now.getMonth(), 1); } if (range === "year") { return new Date(now.getFullYear(), 0, 1); } return null; }
 function isInDashRange(dateStr, range) { if (range === "recent") return true; var d = new Date(dateStr + "T00:00:00"); var start = dashRangeStart(range); return d >= start; }
+/* ---- ダッシュボード全体（統計・ランキング・スピード内訳・推移）にかける期間フィルター。直近の記録リストの独自レンジ切替(上記)とは別の、ダッシュボード全体向けの絞り込み。 ---- */
+function setDashPeriod(period) { S.dashPeriod = period; render(); }
+function dashPeriodLabel(period) { if (period === "30d") return "直近30日"; if (period === "season") return "今シーズン"; return "全期間"; }
+function dashSeasonStart() { var now = new Date(); var year = now.getMonth() >= 4 ? now.getFullYear() : now.getFullYear() - 1; return new Date(year, 4, 1); } // シーズンは5月開始と仮定(要調整可)
+function isInDashPeriod(dateStr, period) {
+if (period === "all" || !period) return true;
+var d = new Date(dateStr + "T00:00:00");
+if (period === "30d") { var cutoff = new Date(); cutoff.setHours(0, 0, 0, 0); cutoff.setDate(cutoff.getDate() - 30); return d >= cutoff; }
+if (period === "season") { return d >= dashSeasonStart(); }
+return true;
+}
+/* ---- 技別ランキングの並び替え ---- */
+function setDashRankSort(mode) { S.dashRankSort = mode; render(); }
+function cycleDashRankSort() { var order = ["count", "rate", "name", "recent"]; var i = order.indexOf(S.dashRankSort); S.dashRankSort = order[(i + 1) % order.length]; render(); }
+function dashRankSortLabel(mode) { if (mode === "rate") return "成功率順"; if (mode === "name") return "技名順"; if (mode === "recent") return "最近実施順"; return "本数順"; }
+function sortRankTotals(totals, mode) {
+var arr = totals.slice();
+if (mode === "rate") {
+arr.sort(function (a, b) { var ra = a.count > 0 ? a.success / a.count : -1; var rb = b.count > 0 ? b.success / b.count : -1; return rb - ra; });
+} else if (mode === "name") {
+arr.sort(function (a, b) { return a.name.localeCompare(b.name, "ja"); });
+} else if (mode === "recent") {
+arr.sort(function (a, b) { return (b.lastDate || "").localeCompare(a.lastDate || ""); });
+} else {
+arr.sort(function (a, b) { return b.count - a.count; });
+}
+return arr;
+}
+/* サンプル数が少ない技は成功率が極端な値に振れやすいため「参考値」であることを明示する。閾値は本数5未満。 */
+var SAMPLE_REFERENCE_THRESHOLD = 5;
+function sampleNoteBadge(count) { return count > 0 && count < SAMPLE_REFERENCE_THRESHOLD ? '<span class="sample-note-badge">参考値(本数少なめ)</span>' : ""; }
 function toggleDashChips(entryId) { S.dashChipsExpanded[entryId] = !S.dashChipsExpanded[entryId]; render(); } function toggleDashGroup(id) { S.dashGroupOpen[id] = !S.dashGroupOpen[id]; render(); }
 function toggleDashRank(id) { S.dashRankOpen[id] = !S.dashRankOpen[id]; render(); }
 function toggleDashNote(entryId) { S.dashNoteOpen[entryId] = !S.dashNoteOpen[entryId]; render(); }
 function toggleDashRowNote(rowId) { S.dashRowNoteOpen[rowId] = !S.dashRowNoteOpen[rowId]; render(); }
+function renderDashPeriodChipsHtml() {
+var opts = ["all", "30d", "season"];
+return '<div style="display:flex;gap:6px;margin-bottom:10px;">' + opts.map(function (p) {
+return '<button class="chip-btn' + (S.dashPeriod === p ? " active" : "") + '" style="font-size:11px;padding:6px 10px;flex:1;" onclick="setDashPeriod(\'' + p + '\')">' + dashPeriodLabel(p) + "</button>";
+}).join("") + "</div>";
+}
 function renderAthleteDashboard() {
-var entries = getEntries(S.dashAthlete, S.dashCategory);
-if (entries.length === 0) {
+var rawEntries = getEntries(S.dashAthlete, S.dashCategory);
+if (rawEntries.length === 0) {
 return '<div class="empty-card">' + escHtml(athleteName(S.dashAthlete)) + 'の' + (S.dashCategory === "water" ? "ウォータージャンプ" : "トランポリン") + 'の記録がまだありません。</div>';
+}
+var periodChipsHtml = renderDashPeriodChipsHtml();
+var entries = S.dashPeriod === "all" ? rawEntries : rawEntries.filter(function (fe) { return isInDashPeriod(fe.date, S.dashPeriod); });
+if (entries.length === 0) {
+return periodChipsHtml + '<div class="empty-card">選択した期間（' + dashPeriodLabel(S.dashPeriod) + '）の記録がありません。</div>';
 }
 var totalAll = entries.reduce(function (s, e) { return s + entryTotal(e); }, 0);
 var successAll = entries.reduce(function (s, e) { return s + entrySuccess(e); }, 0);
 var rate = totalAll > 0 ? Math.round((successAll / totalAll) * 100) : 0;
 var last = entries[entries.length - 1];
-var totals = trickTotals(entries);
+var totals = sortRankTotals(trickTotals(entries), S.dashRankSort);
 var days = daysByCategory(S.dashAthlete);
 var isWater = S.dashCategory === "water";
 var trend = entries.map(function (e) {
@@ -1708,18 +1797,19 @@ var statGrid =
 '<div class="stat-card" style="grid-column:1 / -1;"><div class="stat-label">直近の練習日</div><div class="stat-value" style="font-size:14px;">' + escHtml(last.date) + "</div><div class=\"stat-sub\">" + (isWater ? escHtml(last.facility + " / " + last.kicker) : "トランポリン") + "</div></div>" +
 "</div>";
 
-var maxCount = totals.length ? totals[0].count : 1;
+var maxCount = totals.length ? totals.reduce(function (m, t) { return Math.max(m, t.count); }, 1) : 1;
 var rankHtml = totals.slice(0, 6).map(function (t) {
 var pct = Math.round((t.count / maxCount) * 100);
 var trate = isWater && t.count > 0 ? Math.round((t.success / t.count) * 100) : null;
 var countLabel = isWater ? (t.success + "/" + t.count + "本") : (t.count + "本");
 var countCap = isWater ? '<span class="rank-count-cap">成功/本数</span>' : "";
 var kakariLabel = (!isWater && t.kakari > 0) ? " ・かかり×" + t.kakari : "";
+var sampleNote = sampleNoteBadge(t.count);
 var hasSpeedData = isWater && Object.keys(t.speed).some(function (k) { var d = t.speed[k]; return (d.success + d.fail + (d.yure || 0)) > 0; });
 var rankId = "rank-" + encodeURIComponent(t.name);
 var isOpen = hasSpeedData && !!S.dashRankOpen[rankId];
 var chevron = hasSpeedData ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
-var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countCap + countLabel + (trate !== null ? " ・ " + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
+var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + sampleNote + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countCap + countLabel + (trate !== null ? " ・ " + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
 var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + renderSpeedBreakdownHtml(t.speed) + "</div>") : "";
 return head + detailHtml;
 }).join("");
@@ -1815,13 +1905,14 @@ renderTrendChartHtml("chart-airtime", airtimeTrend, 150) +
 ) : "";
 
 return (
+periodChipsHtml +
 statGrid +
 bestTimeCard +
 '<div class="chart-card"><div class="chart-title">' + iconTrendingUp(14, COLORS.textFaint) + " 総本数と成功率の推移</div>" +
 renderTrendChartHtml("chart-total", trend, 150) +
 "</div>" +
 airtimeChartCard +
-'<div class="card"><div class="recent-title">技別 累計本数' + (isWater ? "・成功率" : "") + "</div><div class=\"rank-list\">" + rankHtml + "</div></div>" +
+'<div class="card"><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>技別 累計本数' + (isWater ? "・成功率" : "") + '</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRankSort()">' + dashRankSortLabel(S.dashRankSort) + '</button></div><div class="rank-list">' + rankHtml + "</div></div>" +
 overallSpeedCard +
 renderVideoGalleryCard(entries) +
 '<div><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>直近の記録</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRange()">' + dashRangeLabel(S.dashRecentRange) + '</button></div><div class="recent-list">' + recentHtml + "</div></div>" +
@@ -2076,6 +2167,8 @@ r.modifier = deriveModifier(r.grabCategory, r.grabType);
 render();
 }
 function setEditRowNear(idx, v) { var r = S.editDraft.rows[idx]; r.near = (r.near === v ? null : v); render(); }
+function openEditGrabModal(idx) { S.grabModalEditRowIdx = idx; render(); }
+function closeEditGrabModal() { S.grabModalEditRowIdx = null; render(); }
 function setEditRowResult(idx, v) { var r = S.editDraft.rows[idx]; r.result = (r.result === v ? "" : v); render(); }
 function toggleEditRowWobbleTag(idx, tag) {
 var r = S.editDraft.rows[idx];
@@ -2194,7 +2287,7 @@ return (
 '<button class="remove-btn" onclick="removeEditRow(' + idx + ')" style="margin-left:auto;">' + iconMinus(14, COLORS.textFaint) + "</button>" +
 "</div>" +
 trickSelect +
-(isTrampoline ? '<div class="inline-row">' + modifierChips + "</div>" : '<div class="sub-label">グラブ・ポジション</div><div class="inline-row">' + modifierChips + "</div>" + renderGrabPickerHtml(idx, row, "setEditRowGrab", "setEditRowNear")) +
+(isTrampoline ? '<div class="inline-row">' + modifierChips + "</div>" : '<div class="sub-label">グラブ・ポジション</div><div class="inline-row">' + modifierChips + "</div>" + renderGrabPickerHtml(idx, row, "setEditRowGrab", "setEditRowNear", "openEditGrabModal")) +
 '<div class="inline-row">' + nukiChip + unnaturalChip + "</div>" +
 '<div class="inline-row">' + countFields + "</div>" +
 (isTrampoline ? "" : ('<div class="sub-label" style="margin-top:8px;">結果（任意）</div><div class="inline-row">' + renderResultChipsHtml(idx, row, "setEditRowResult") + "</div>" + renderYurePanelHtml(idx, row, "toggleEditRowWobbleTag", "setEditRowWobbleSeverity"))) +
@@ -2306,7 +2399,9 @@ renderHeader() +
 renderTabs() +
 (S.tab === "record" ? renderRecordTab() : renderDashboardTab()) +
 "</div></div>" +
-renderVideoModal();
+renderVideoModal() +
+renderGrabModal() +
+renderEditGrabModal();
 wireCharts();
 }
 function renderLoading() {
