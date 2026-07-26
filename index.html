@@ -819,7 +819,7 @@ if (category === "trampoline") return { rowId: genRowId(), trickId: defaultTrick
 return { rowId: genRowId(), trickId: defaultTrick, grabCategory: "none", grabType: null, near: null, modifier: "none", nuki: false, unnatural: false, reps: "", result: "", wobbleDetail: [], note: "", shareNote: false, videos: [], speedLevel: "normal", _collapsed: false };
 }
 var S = {
-dashRecentRange: "recent",
+dashRecentExpanded: false,
 dashChipsExpanded: {},dashGroupOpen: {},dashRankOpen: {},
 dashNoteOpen: {},dashRowNoteOpen: {},refreshing: false,
 refreshError: "",
@@ -1733,11 +1733,8 @@ addHtml = '<label class="recent-video-btn' + toneClass + '" for="' + inputId + '
 }
 return pills + addHtml;
 }
-function cycleDashRange() { var order = ["recent", "week", "month", "year"]; var i = order.indexOf(S.dashRecentRange); S.dashRecentRange = order[(i + 1) % order.length]; render(); }
-function dashRangeLabel(range) { if (range === "week") return "今週"; if (range === "month") return "今月"; if (range === "year") return "今年"; return "直近"; }
-function dashRangeStart(range) { var now = new Date(); if (range === "week") { var day = now.getDay(); var diffToMonday = day === 0 ? 6 : day - 1; return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday); } if (range === "month") { return new Date(now.getFullYear(), now.getMonth(), 1); } if (range === "year") { return new Date(now.getFullYear(), 0, 1); } return null; }
-function isInDashRange(dateStr, range) { if (range === "recent") return true; var d = new Date(dateStr + "T00:00:00"); var start = dashRangeStart(range); return d >= start; }
-/* ---- ダッシュボード全体（統計・ランキング・スピード内訳・推移）にかける期間フィルター。直近の記録リストの独自レンジ切替(上記)とは別の、ダッシュボード全体向けの絞り込み。 ---- */
+function toggleDashRecentExpanded() { S.dashRecentExpanded = !S.dashRecentExpanded; render(); }
+/* ---- ダッシュボード全体（統計・ランキング・スピード内訳・推移・直近の記録）にかける期間フィルター。直近の記録リストは以前は独自のレンジ切替を持っていたが、この期間フィルターに統一した。 ---- */
 function setDashPeriod(period) { S.dashPeriod = period; render(); }
 function dashPeriodLabel(period) { if (period === "30d") return "直近30日"; if (period === "season") return "今シーズン"; return "全期間"; }
 function dashSeasonStart() { var now = new Date(); var year = now.getMonth() >= 4 ? now.getFullYear() : now.getFullYear() - 1; return new Date(year, 4, 1); } // シーズンは5月開始と仮定(要調整可)
@@ -1825,7 +1822,15 @@ return head + detailHtml;
 }).join("");
 var overallSpeedCard = (isWater && totals.some(function (t) { return Object.keys(t.speed).length > 0; })) ? ('<div class="card"><div class="recent-title">進入スピード別 成功率・ヨレ率(全技合算)</div>' + speedLegendHtml() + renderSpeedBreakdownHtml(speedTotalsAggregate(totals)) + "</div>") : "";
 
-var recentHtml = (S.dashRecentRange === "recent" ? entries.slice().reverse().slice(0, 6) : entries.filter(function (fe) { return isInDashRange(fe.date, S.dashRecentRange); }).slice().reverse()).map(function (e) {
+var RECENT_DEFAULT_DAYS = 2;
+var allRecentEntries = entries.slice().reverse();
+var recentUniqueDates = [];
+allRecentEntries.forEach(function (e) { if (recentUniqueDates.indexOf(e.date) === -1) recentUniqueDates.push(e.date); });
+var recentCutoffDates = recentUniqueDates.slice(0, RECENT_DEFAULT_DAYS);
+var recentCollapsedEntries = allRecentEntries.filter(function (e) { return recentCutoffDates.indexOf(e.date) !== -1; });
+var recentHiddenCount = allRecentEntries.length - recentCollapsedEntries.length;
+var recentVisibleEntries = S.dashRecentExpanded ? allRecentEntries : recentCollapsedEntries;
+var recentHtml = recentVisibleEntries.map(function (e) {
 var chipsExpanded = !!S.dashChipsExpanded[e.id];
 var shownRows = chipsExpanded ? e.rows : e.rows.slice(0, 10);
 var groupOrder = [], groupMap = {};
@@ -1924,7 +1929,7 @@ airtimeChartCard +
 '<div class="card"><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>技別 累計本数' + (isWater ? "・成功率" : "") + '</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRankSort()">' + dashRankSortLabel(S.dashRankSort) + '</button></div>' + (isWater ? '<div class="rank-count-cap" style="margin:-2px 0 6px;">バーの長さ＝累計本数／右側＝成功本数/本数・成功率</div>' : "") + '<div class="rank-list">' + rankHtml + "</div></div>" +
 overallSpeedCard +
 renderVideoGalleryCard(entries) +
-'<div><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>直近の記録</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRange()">' + dashRangeLabel(S.dashRecentRange) + '</button></div><div class="recent-list">' + recentHtml + "</div></div>" +
+'<div><div class="recent-title">直近の記録</div><div class="recent-list">' + recentHtml + "</div>" + (recentHiddenCount > 0 ? '<button class="chip-btn" style="margin-top:8px;font-size:11px;padding:6px 10px;width:100%;" onclick="toggleDashRecentExpanded()">' + (S.dashRecentExpanded ? "閉じる" : "＋過去の記録を見る (" + recentHiddenCount + "件)") + "</button>" : "") + "</div>" +
 (isWater ? renderFacilityBreakdown(entries) : "")
 );
 }
@@ -2100,8 +2105,8 @@ body +
 "</div>"
 );
 }
-function setDashAthlete(id) { S.dashAthlete = id; if (id !== "team") touchRecentAthlete(id); S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; render(); }
-function setDashCategory(c) { S.dashCategory = c; S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; render(); }
+function setDashAthlete(id) { S.dashAthlete = id; if (id !== "team") touchRecentAthlete(id); S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; S.dashRecentExpanded = false; render(); }
+function setDashCategory(c) { S.dashCategory = c; S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; S.dashRecentExpanded = false; render(); }
 function toggleBestTimeExpand() { S.dashBestTimeExpanded = !S.dashBestTimeExpanded; render(); }
 function setVideoFilterTrick(v) { S.videoFilterTrick = v; render(); }
 
@@ -2115,10 +2120,11 @@ date: e.date,
 facility: e.facility || FACILITIES[0].name,
 kicker: e.kicker || (kickersForFacility(e.facility || FACILITIES[0].name)[0] || ""),
 note: e.note || "",
-rows: e.rows.map(function (r) {
+rows: e.rows.reduce(function (acc, r) {
 var grabCategory = r.modifier === "position" ? "position" : (r.modifier === "G" || r.modifier === "g" ? "grab" : "none");
+function makeRow(rowId, reps, result) {
 return {
-rowId: r.rowId || genRowId(),
+rowId: rowId,
 trickId: r.trickId,
 modifier: r.modifier,
 grabCategory: grabCategory,
@@ -2126,16 +2132,28 @@ grabType: grabCategory === "grab" ? (r.grabType || "other") : null,
 near: r.near || null,
 nuki: !!r.nuki,
 unnatural: !!r.unnatural,
-success: r.success,
-fail: r.fail,
-reps: r.reps,
-result: r.result || "",
+reps: reps,
+result: result,
 wobbleDetail: r.wobbleDetail || [],
 speedLevel: r.speedLevel || "normal",
 note: r.note || "",
 shareNote: r.shareNote,
 };
-}),
+}
+if (r.reps === undefined && (r.success !== undefined || r.fail !== undefined)) {
+/* 新形式(本数+結果1つ)に切り替わる前の記録：成功数・失敗数を別々に持っていたため、
+   そのまま1行に詰め込むと本数欄が空(0本相当)になってしまっていた(実際に発生した不具合)。
+   ここで成功行・失敗行の最大2行に分けることで、元のデータを失わずに編集できるようにする。 */
+var succ = Number(r.success) || 0;
+var fai = Number(r.fail) || 0;
+if (succ > 0) acc.push(makeRow(genRowId(), succ, "success"));
+if (fai > 0) acc.push(makeRow(genRowId(), fai, "fail"));
+if (succ === 0 && fai === 0) acc.push(makeRow(r.rowId || genRowId(), 0, ""));
+} else {
+acc.push(makeRow(r.rowId || genRowId(), r.reps, r.result || ""));
+}
+return acc;
+}, []),
 };
 S.confirmDeleteId = null;
 render();
