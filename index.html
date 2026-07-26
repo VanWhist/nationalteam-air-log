@@ -120,8 +120,13 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .recent-item { border-radius: 8px; padding: 10px 12px; background: #131F30; border: 1px solid #26374E; }
 .recent-date { font-size: 12px; font-family: ui-monospace, monospace; color: #8CA0B8; }
 .recent-meta { font-size: 10px; color: #5C7086; margin-top: 2px; }
-.recent-techs { font-size: 13px; margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
+.recent-techs { font-size: 13px; margin-top: 4px; display: flex; flex-direction: column; }
 .recent-tech-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.recent-tech-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-top: 1px solid #1B2C42; cursor: pointer; }
+.recent-tech-summary:first-child { border-top: none; }
+.recent-tech-summary-label { font-size: 12.5px; color: #C7D6E5; }
+.recent-tech-summary-label.has-note { color: #FFB870; }
+.recent-tech-summary-detail { font-size: 10px; color: #5C7086; margin-left: 4px; white-space: nowrap; }
 .recent-tech-chip { font-size: 11px; background: #1B2C42; border: 1px solid #26374E; border-radius: 6px; padding: 3px 7px; }
 .recent-tech-chip.has-note { background: rgba(255,184,112,0.14); border: 1px solid #FFB870; } .detail-btn { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:600; padding:3px 7px; border-radius:6px; background:#26374E; border:1px solid #37506E; color:#C7D6E5; margin-left:6px; } .detail-btn.open { background:#4CC3F0; color:#062230; border-color:#4CC3F0; } .merge-bar-wrap { height:5px; border-radius:3px; background:#0F1929; overflow:hidden; margin-top:6px; } .merge-bar { height:100%; border-radius:3px; }
 .recent-note { font-size: 11px; margin-top: 4px; color: #5C7086; }
@@ -1845,13 +1850,12 @@ var rate = (!grp.isReps && (grp.success + grp.fail) > 0) ? Math.round((grp.succe
 var rateColor = rate === null ? COLORS.ice : (rate >= 70 ? COLORS.ice : (rate >= 40 ? COLORS.amber : "#E5484D"));
 var countBadge = grp.items.length > 1 ? ('<span style="font-size:9px;color:' + COLORS.textFaint + ';margin-left:4px;">(' + grp.items.length + "件を合算)</span>") : "";
 var kakariLabel = grp.kakari > 0 ? " ・かかり×" + grp.kakari : "";
-var detailBtn = '<span class="detail-btn' + (isOpen ? " open" : "") + '">内訳<span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + '">▸</span></span>';
+var detailBtn = '<span class="recent-tech-summary-detail">内訳<span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + '">▸</span></span>';
 var notePreview = (!isOpen && hasNote) ? ('<div class="tech-note-row-display">' + (uniqueNotes.length === 1 ? "📝 " + escHtml(uniqueNotes[0]) : "📝 メモ " + uniqueNotes.length + "件") + "</div>") : "";
-var barHtml = !grp.isReps ? ('<div class="merge-bar-wrap"><div class="merge-bar" style="width:' + (rate || 0) + "%;background:" + rateColor + ';"></div></div>') : "";
-var head = '<div class="recent-tech-row" onclick="toggleDashGroup(\'' + gid + '\')" style="cursor:pointer;">' +
-'<span class="recent-tech-chip' + (hasNote ? " has-note" : "") + '">' + (hasNote ? "📝 " : "") + escHtml(trickLabel(grp.trickId)) + (grp.code ? " (" + escHtml(grp.code) + ")" : "") + (grp.nuki ? " ・抜き" : "") + (grp.unnatural ? " ・アンナチュラル" : "") + kakariLabel + countBadge + " " + detailBtn + "</span>" +
-'<span style="font-family:ui-monospace,monospace;font-weight:700;color:' + rateColor + ';">' + (rate !== null ? rate + "% " : "") + countLabel + "</span>" +
-"</div>" + barHtml + notePreview;
+var head = '<div class="recent-tech-summary" onclick="toggleDashGroup(\'' + gid + '\')">' +
+'<span class="recent-tech-summary-label' + (hasNote ? " has-note" : "") + '">' + (hasNote ? "📝 " : "") + escHtml(trickLabel(grp.trickId)) + (grp.code ? " (" + escHtml(grp.code) + ")" : "") + (grp.nuki ? " ・抜き" : "") + (grp.unnatural ? " ・アンナチュラル" : "") + kakariLabel + countBadge + "</span>" +
+'<span style="display:flex;align-items:center;flex-shrink:0;"><span style="font-family:ui-monospace,monospace;font-weight:700;color:' + rateColor + ';">' + (rate !== null ? rate + "% " : "") + countLabel + "</span>" + detailBtn + "</span>" +
+"</div>" + notePreview;
 var detailHtml = isOpen ? ('<div class="group-detail" style="margin-top:6px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + grp.items.map(function (it) {
 var r = it.row, ri = it.ri;
 var code2 = composedCode(r.trickId, r.modifier);
