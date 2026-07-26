@@ -1432,6 +1432,13 @@ agg[lv.key].yureHigh += d.yureHigh || 0;
 return agg;
 }
 /* 進入スピード別の内訳バー。成功(氷色)/失敗(赤)/ヨレ(琥珀)で積み上げ表示し、ヨレはさらに強さ1〜2(浅め)/3〜5(深め)の内訳も添える。 */
+function speedLegendHtml() {
+return '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:9.5px;color:' + COLORS.textFaint + ';margin:2px 0 6px;">' +
+'<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;display:inline-block;background:' + COLORS.ice + ';"></span>成功</span>' +
+'<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;display:inline-block;background:#E5484D;"></span>失敗</span>' +
+'<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;display:inline-block;background:' + COLORS.amber + ';"></span>ヨレ</span>' +
+"</div>";
+}
 function renderSpeedBreakdownHtml(speedMap) {
 return SPEED_LEVELS.map(function (lv) {
 var d = speedMap[lv.key] || { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 };
@@ -1451,8 +1458,9 @@ var barHtml = total > 0
 '<div style="width:' + yurePct + '%;background:' + COLORS.amber + ';"></div>' +
 '</div>'
 : "";
-var rateLabel = rate === null ? "-" : "成功" + rate + "%";
-var yureLabel = (yure > 0 && yureRate !== null) ? " ・ヨレ" + yureRate + "%" : "";
+var lowSample = total > 0 && total < SAMPLE_REFERENCE_THRESHOLD;
+var rateLabel = rate === null ? "-" : "成功" + rate + "%" + (lowSample ? "(" + d.success + "/" + total + ")" : "");
+var yureLabel = (yure > 0 && yureRate !== null) ? " ・ヨレ" + yureRate + "%" + (lowSample ? "(" + yure + "/" + total + ")" : "") : "";
 var unknownSeverity = yure - yureLow - yureHigh;
 var yureDetailHtml = (yure > 0 && (yureLow > 0 || yureHigh > 0))
 ? '<div style="font-size:9.5px;color:' + COLORS.textFaint + ';margin:0 0 6px 112px;">ヨレ内訳：浅め(1〜2) ' + yureLow + '件 ・ 深め(3〜5) ' + yureHigh + '件' + (unknownSeverity > 0 ? ' ・評価なし ' + unknownSeverity + '件' : '') + '</div>'
@@ -1528,7 +1536,7 @@ return '<div class="chart-wrap" id="' + id + '">' + svg + '<div class="chart-too
 }
 function renderTrendChartHtml(id, data, height) {
 var width = 400;
-var m = { top: 18, bottom: 20, left: 28, right: 30 };
+var m = { top: 18, bottom: 20, left: 28, right: 16 };
 var plotW = width - m.left - m.right;
 var plotH = height - m.top - m.bottom;
 var n = data.length;
@@ -1549,10 +1557,8 @@ svg += '<line x1="' + m.left + '" y1="' + (m.top + plotH) + '" x2="' + (m.left +
 /* axis tick labels: left = 本数(count), right = 成功率(%) */
 svg += '<text x="' + (m.left - 4) + '" y="' + (m.top + 3) + '" text-anchor="end" font-size="9" fill="' + COLORS.textFaint + '">' + maxCount + "</text>";
 svg += '<text x="' + (m.left - 4) + '" y="' + (m.top + plotH + 3) + '" text-anchor="end" font-size="9" fill="' + COLORS.textFaint + '">0</text>';
-if (hasRate) {
-svg += '<text x="' + (m.left + plotW + 4) + '" y="' + (m.top + 3) + '" text-anchor="start" font-size="9" fill="' + COLORS.textFaint + '">100%</text>';
-svg += '<text x="' + (m.left + plotW + 4) + '" y="' + (m.top + plotH + 3) + '" text-anchor="start" font-size="9" fill="' + COLORS.textFaint + '">0%</text>';
-}
+/* 右軸の目盛りラベル(100%/0%)は、100%地点でバーやサークルと重なって読みにくくなるため非表示。
+   成功率は各◯の中に数値を直接表示しているので、軸ラベルがなくても読める */
 
 /* date labels: first / mid / last */
 var mid = Math.floor((n - 1) / 2);
@@ -1802,18 +1808,17 @@ var rankHtml = totals.slice(0, 6).map(function (t) {
 var pct = Math.round((t.count / maxCount) * 100);
 var trate = isWater && t.count > 0 ? Math.round((t.success / t.count) * 100) : null;
 var countLabel = isWater ? (t.success + "/" + t.count + "本") : (t.count + "本");
-var countCap = isWater ? '<span class="rank-count-cap">成功/本数</span>' : "";
 var kakariLabel = (!isWater && t.kakari > 0) ? " ・かかり×" + t.kakari : "";
 var sampleNote = sampleNoteBadge(t.count);
 var hasSpeedData = isWater && Object.keys(t.speed).some(function (k) { var d = t.speed[k]; return (d.success + d.fail + (d.yure || 0)) > 0; });
 var rankId = "rank-" + encodeURIComponent(t.name);
 var isOpen = hasSpeedData && !!S.dashRankOpen[rankId];
 var chevron = hasSpeedData ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
-var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + sampleNote + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countCap + countLabel + (trate !== null ? " ・ " + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
-var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + renderSpeedBreakdownHtml(t.speed) + "</div>") : "";
+var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + sampleNote + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countLabel + (trate !== null ? " ・ " + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
+var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + speedLegendHtml() + renderSpeedBreakdownHtml(t.speed) + "</div>") : "";
 return head + detailHtml;
 }).join("");
-var overallSpeedCard = (isWater && totals.some(function (t) { return Object.keys(t.speed).length > 0; })) ? ('<div class="card"><div class="recent-title">進入スピード別 成功率・ヨレ率(全技合算)</div>' + renderSpeedBreakdownHtml(speedTotalsAggregate(totals)) + "</div>") : "";
+var overallSpeedCard = (isWater && totals.some(function (t) { return Object.keys(t.speed).length > 0; })) ? ('<div class="card"><div class="recent-title">進入スピード別 成功率・ヨレ率(全技合算)</div>' + speedLegendHtml() + renderSpeedBreakdownHtml(speedTotalsAggregate(totals)) + "</div>") : "";
 
 var recentHtml = (S.dashRecentRange === "recent" ? entries.slice().reverse().slice(0, 6) : entries.filter(function (fe) { return isInDashRange(fe.date, S.dashRecentRange); }).slice().reverse()).map(function (e) {
 var chipsExpanded = !!S.dashChipsExpanded[e.id];
@@ -1912,7 +1917,7 @@ bestTimeCard +
 renderTrendChartHtml("chart-total", trend, 150) +
 "</div>" +
 airtimeChartCard +
-'<div class="card"><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>技別 累計本数' + (isWater ? "・成功率" : "") + '</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRankSort()">' + dashRankSortLabel(S.dashRankSort) + '</button></div><div class="rank-list">' + rankHtml + "</div></div>" +
+'<div class="card"><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>技別 累計本数' + (isWater ? "・成功率" : "") + '</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRankSort()">' + dashRankSortLabel(S.dashRankSort) + '</button></div>' + (isWater ? '<div class="rank-count-cap" style="margin:-2px 0 6px;">バーの長さ＝累計本数／右側＝成功本数/本数・成功率</div>' : "") + '<div class="rank-list">' + rankHtml + "</div></div>" +
 overallSpeedCard +
 renderVideoGalleryCard(entries) +
 '<div><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>直近の記録</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRange()">' + dashRangeLabel(S.dashRecentRange) + '</button></div><div class="recent-list">' + recentHtml + "</div></div>" +
