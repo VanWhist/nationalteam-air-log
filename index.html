@@ -206,7 +206,6 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .grab-modal-sheet { width: 100%; max-width: 480px; max-height: 82vh; overflow-y: auto; background: #0F1929; border: 1px solid #26374E; border-radius: 16px 16px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
 .grab-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: #EAF1F8; }
 .grab-modal-close { background: #1B2C42; border: 1px solid #26374E; color: #EAF1F8; border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-.sample-note-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #2A1F0E; border: 1px solid #6B4A1E; color: #FFB870; margin-left: 4px; vertical-align: middle; }
 
 .yure-panel { background: #131F30; border: 1px solid #7a4a1f; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .yure-list-item { background: #1B2C42; border: 1px solid #26374E; border-radius: 8px; padding: 10px; cursor: pointer; }
@@ -1762,9 +1761,9 @@ arr.sort(function (a, b) { return b.count - a.count; });
 }
 return arr;
 }
-/* サンプル数が少ない技は成功率が極端な値に振れやすいため「参考値」であることを明示する。閾値は本数5未満。 */
-var SAMPLE_REFERENCE_THRESHOLD = 5;
-function sampleNoteBadge(count) { return count > 0 && count < SAMPLE_REFERENCE_THRESHOLD ? '<span class="sample-note-badge">参考値(本数少なめ)</span>' : ""; }
+/* 進入スピード内訳で、1スピード帯あたりの本数が少ない場合は成功率が極端な値に振れやすいため「参考値」であることを明示する。
+   閾値はコーチ確認済み(1スピード帯30本未満)。技別ランキングの合計本数には適用しない(コーチ確認済み：全体本数は参考値表示なし)。 */
+var SAMPLE_REFERENCE_THRESHOLD = 30;
 function toggleDashChips(entryId) { S.dashChipsExpanded[entryId] = !S.dashChipsExpanded[entryId]; render(); } function toggleDashGroup(id) { S.dashGroupOpen[id] = !S.dashGroupOpen[id]; render(); }
 function toggleDashRank(id) { S.dashRankOpen[id] = !S.dashRankOpen[id]; render(); }
 function toggleDashNote(entryId) { S.dashNoteOpen[entryId] = !S.dashNoteOpen[entryId]; render(); }
@@ -1811,12 +1810,11 @@ var pct = Math.round((t.count / maxCount) * 100);
 var trate = isWater && t.count > 0 ? Math.round((t.success / t.count) * 100) : null;
 var countLabel = isWater ? (t.success + "/" + t.count + "本") : (t.count + "本");
 var kakariLabel = (!isWater && t.kakari > 0) ? " ・かかり×" + t.kakari : "";
-var sampleNote = sampleNoteBadge(t.count);
 var hasSpeedData = isWater && Object.keys(t.speed).some(function (k) { var d = t.speed[k]; return (d.success + d.fail + (d.yure || 0)) > 0; });
 var rankId = "rank-" + encodeURIComponent(t.name);
 var isOpen = hasSpeedData && !!S.dashRankOpen[rankId];
 var chevron = hasSpeedData ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
-var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + sampleNote + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countLabel + (trate !== null ? " ・ " + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
+var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countLabel + (trate !== null ? " ・ " + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
 var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + speedLegendHtml() + renderSpeedBreakdownHtml(t.speed) + "</div>") : "";
 return head + detailHtml;
 }).join("");
