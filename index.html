@@ -540,8 +540,19 @@ return '<div class="lang-toggle" role="group" aria-label="Language">' +
 /* ---- Googleスプレッドシート連携(Apps Script Web App) ---- */
 var API_URL = "https://script.google.com/macros/s/AKfycbwhxPSdRvM67Bf7RO6gDUoZxxvGipDNGs7Up5BXUvbqulr90wjGzhZXtV2VQERyP3rAYw/exec";
 
+/* URLの?token=を読み取る。選手専用リンク用。サーバーが scoped:true を返すまでは
+「制限がかかっているつもり」の見た目にはしない(IS_SCOPEDはrefreshData内でのみtrueになる)。 */
+var URL_TOKEN = (function () {
+try {
+var m = location.search.match(/[?&]token=([^&]+)/);
+return m ? decodeURIComponent(m[1]) : "";
+} catch (e) { return ""; }
+})();
+var IS_SCOPED = false;
+
 function apiGet() {
-return fetch(API_URL).then(function (res) { return res.json(); });
+var url = API_URL + (URL_TOKEN ? "?token=" + encodeURIComponent(URL_TOKEN) : "");
+return fetch(url).then(function (res) { return res.json(); });
 }
 function apiPost(payload) {
 return fetch(API_URL, {
@@ -555,8 +566,12 @@ return apiGet().then(function (data) {
 ATHLETES = (data.athletes || []).map(function (a) { return { id: a.id, name: a.name }; });
 DATA = data.records || [];
 VIDEOS = data.videos || [];
+IS_SCOPED = !!(data.scoped === true && URL_TOKEN && ATHLETES.length === 1);
 recentAthleteIds = computeRecentAthleteIds();
-if (!S.athlete && ATHLETES.length) { S.athlete = getOrderedAthletes()[0].id; }
+if (IS_SCOPED) {
+S.athlete = ATHLETES[0].id;
+S.dashAthlete = ATHLETES[0].id;
+} else if (!S.athlete && ATHLETES.length) { S.athlete = getOrderedAthletes()[0].id; }
 });
 }
 /* サーバー確認済みの動画(VIDEOS)を行(rowId)単位で検索する。rowId/typeが記録されている
@@ -1617,6 +1632,8 @@ function renderRecordTab() {
 var athleteSection;
 if (!hasAthletes()) {
 athleteSection = '<div class="sub-label">' + tr("選手が登録されていません。まず選手名を追加してください。") + '</div>' + renderAddAthleteForm("record");
+} else if (IS_SCOPED) {
+athleteSection = '<div class="text-input" style="background:transparent;border:none;padding:10px 0;font-weight:700;font-size:15px;">' + escHtml(athleteName(S.athlete)) + "</div>";
 } else {
 var athleteSelect =
 '<div class="select-wrap"><select class="select-input" onchange="selectAthlete(this.value)">' + renderAthleteOptions(S.athlete) + "</select>" +
@@ -2395,15 +2412,21 @@ return modeToggle + (S.teamRankMode === "trick" ? renderTeamTrickRanking() : ren
 }
 
 function renderDashboardTab() {
+var athleteSection;
+if (IS_SCOPED) {
+athleteSection = "";
+} else {
 var athleteSelect =
 '<div class="select-wrap"><select class="select-input" onchange="setDashAthlete(this.value)">' +
 '<option value="team" ' + (S.dashAthlete === "team" ? "selected" : "") + ">" + escHtml(tr("チーム全体(全選手)")) + "</option>" +
 renderAthleteOptions(S.dashAthlete === "team" ? null : S.dashAthlete) +
 "</select><span class=\"select-chevron\">" + iconChevronDown(16, COLORS.textFaint) + "</span></div>";
+athleteSection = '<div><label class="field-label">' + tr("表示対象") + '</label>' + athleteSelect + renderAddAthleteForm("dashboard") + "</div>";
+}
 var body = S.dashAthlete === "team" ? renderTeamDashboard() : renderAthleteDashboard();
 return (
 '<div class="section">' +
-'<div><label class="field-label">' + tr("表示対象") + '</label>' + athleteSelect + renderAddAthleteForm("dashboard") + "</div>" +
+athleteSection +
 body +
 "</div>"
 );
