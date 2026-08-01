@@ -1483,7 +1483,7 @@ function toggleRowNoteOpen(idx) { S.rows[idx]._noteOpen = !S.rows[idx]._noteOpen
 function renderTechRowNoteHtml(row, idx) {
 var noteOpen = row._noteOpen || (row.note && row.note.trim());
 if (!noteOpen) { return '<div class="tech-note-toggle"><a href="javascript:void(0)" onclick="toggleRowNoteOpen(' + idx + ')">' + tr("+ メモ") + '</a></div>'; }
-return '<div class="tech-note-row"><textarea class="note-textarea tech-note-input" rows="2" placeholder="' + escAttr(tr("この技のメモ")) + '" oninput="setRowField(' + idx + ",'note',this.value)\" onblur=\"render()\">" + escHtml(row.note || '') + '</textarea><label class="tech-share-check"><input type="checkbox" onchange="setRowField(' + idx + ",'shareNote',this.checked)\"" + (row.shareNote ? ' checked' : '') + '>' + tr(" コーチにも共有") + '</label></div>';
+return '<div class="tech-note-row"><textarea class="note-textarea tech-note-input" rows="2" placeholder="' + escAttr(tr("この技のメモ")) + '" oninput="setRowField(' + idx + ",'note',this.value)\" onblur=\"render()\">" + escHtml(row.note || '') + "</textarea></div>";
 }
 
 function renderSpeedSelectHtml(idx, row, setterFnName) {
@@ -1692,7 +1692,7 @@ return (
 '<span class="select-chevron">' + iconChevronDown(16, COLORS.textFaint) + "</span></div>" +
 '<div class="sub-label">' + tr("台のサイズ") + '</div><div class="chip-grid">' + kickerChips + "</div></div>" +
 '<div><label class="field-label">' + tr("技ログ") + '</label><div class="tech-row-list">' + rowsHtml + "</div></div>" +
-'<div><label class="field-label">' + tr("メモ(任意)") + '</label><textarea class="note-textarea" rows="2" placeholder="' + escAttr(tr("感覚、風向き、恐怖心など")) + '" oninput="setNote(this.value)">' + escHtml(S.note) + '</textarea><label class="tech-share-check"><input type="checkbox" onchange="S.shareNote=this.checked" ' + (S.shareNote ? "checked" : "") + '>' + tr(" コーチにも共有") + '</label></div>' +
+'<div><label class="field-label">' + tr("メモ(任意)") + '</label><textarea class="note-textarea" rows="2" placeholder="' + escAttr(tr("感覚、風向き、恐怖心など")) + '" oninput="setNote(this.value)">' + escHtml(S.note) + '</textarea></div>' +
 (S.bgUpload ? '<div class="save-note">' + tr("🎬 動画をアップロード中…") + ' (' + S.bgUpload.done + '/' + S.bgUpload.total + ')</div>' : "") +
 (S.saveError ? '<div style="color:' + COLORS.amber + ';font-size:12px;margin-top:8px;">' + escHtml(S.saveError) + tr(" 入力内容は保持されています。") + "</div>" : "") +
 '<div class="record-fixed-spacer"></div>' +
