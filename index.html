@@ -1169,7 +1169,7 @@ render();
 function emptyTechRow(category) {
 var defaultTrick = (typeof S !== "undefined" && S && S.trickLastUsed && (S.trickLastUsed !== "airtime" || category === "trampoline")) ? S.trickLastUsed : "rot_3";
 if (category === "trampoline") return { rowId: genRowId(), trickId: defaultTrick, modifier: "none", nuki: false, unnatural: false, note: "", shareNote: false, kakari: false, reps: "", videos: [], _collapsed: false };
-return { rowId: genRowId(), trickId: defaultTrick, grabCategory: "none", grabType: null, near: null, modifier: "none", nuki: false, unnatural: false, reps: "", result: "", wobbleDetail: [], note: "", shareNote: false, videos: [], speedLevel: "normal", _collapsed: false };
+return { rowId: genRowId(), trickId: defaultTrick, grabCategory: "none", grabType: null, near: null, modifier: "none", nuki: false, unnatural: false, kakari: false, reps: "", result: "", wobbleDetail: [], note: "", shareNote: false, videos: [], speedLevel: "normal", _collapsed: false };
 }
 var S = {
 dashRecentExpanded: false,
@@ -2495,6 +2495,7 @@ grabType: grabCategory === "grab" ? (r.grabType || "other") : null,
 near: r.near || null,
 nuki: !!r.nuki,
 unnatural: !!r.unnatural,
+kakari: !!r.kakari,
 reps: reps,
 result: result,
 wobbleDetail: r.wobbleDetail || [],
@@ -2583,12 +2584,12 @@ return { rowId: r.rowId || genRowId(), trickId: r.trickId, trickLabel: trickLabe
 });
 } else {
 validRows = S.editDraft.rows.filter(function (r) {
-return (r.reps !== "" && r.reps !== undefined) || !!r.result || (r.grabCategory && r.grabCategory !== "none") || (r.wobbleDetail && r.wobbleDetail.length > 0) || !!r.nuki || !!r.unnatural || ((r.note || "").trim() !== "") || (r.success !== "" && r.success !== undefined && Number(r.success) >= 0) || (r.fail !== "" && r.fail !== undefined && Number(r.fail) >= 0);
+return (r.reps !== "" && r.reps !== undefined) || !!r.result || (r.grabCategory && r.grabCategory !== "none") || (r.wobbleDetail && r.wobbleDetail.length > 0) || !!r.nuki || !!r.unnatural || !!r.kakari || ((r.note || "").trim() !== "") || (r.success !== "" && r.success !== undefined && Number(r.success) >= 0) || (r.fail !== "" && r.fail !== undefined && Number(r.fail) >= 0);
 }).map(function (r) {
 var repsNum = (r.reps !== "" && r.reps !== undefined) ? (Number(r.reps) || 0) : 0;
 var successOut = r.result === "success" ? repsNum : (r.result ? 0 : Number(r.success) || 0);
 var failOut = r.result === "fail" ? repsNum : (r.result ? 0 : Number(r.fail) || 0);
-return { rowId: r.rowId || genRowId(), trickId: r.trickId, trickLabel: trickLabelRaw(r.trickId), modifier: r.modifier, nuki: !!r.nuki, unnatural: !!r.unnatural, reps: repsNum, result: r.result || "", grabType: r.grabCategory === "grab" ? (r.grabType || "") : "", near: r.near || "", wobbleDetail: r.wobbleDetail || [], success: successOut, fail: failOut, speedLevel: r.speedLevel || "normal", note: (r.note || "").trim() };
+return { rowId: r.rowId || genRowId(), trickId: r.trickId, trickLabel: trickLabelRaw(r.trickId), modifier: r.modifier, nuki: !!r.nuki, unnatural: !!r.unnatural, kakari: !!r.kakari, reps: repsNum, result: r.result || "", grabType: r.grabCategory === "grab" ? (r.grabType || "") : "", near: r.near || "", wobbleDetail: r.wobbleDetail || [], success: successOut, fail: failOut, speedLevel: r.speedLevel || "normal", note: (r.note || "").trim() };
 });
 }
 if (validRows.length === 0) return;
@@ -2659,6 +2660,7 @@ return '<button class="chip-btn ' + (isGrabLetter ? "amber " : "") + (row.modifi
 }).join("") : renderGrabCategoryChipsHtml(idx, row, "setEditRowGrabCategory");
 var nukiChip = '<button class="chip-btn ' + (row.nuki ? "active" : "") + '" style="flex:1;font-size:10px;padding:8px 3px;" onclick="toggleEditRowNuki(' + idx + ')">' + tr("抜き") + '</button>';
 var unnaturalChip = '<button class="chip-btn ' + (row.unnatural ? "active" : "") + '" style="flex:1;font-size:10px;padding:8px 3px;" onclick="toggleEditRowUnnatural(' + idx + ')">' + tr("アンナチュラル") + '</button>';
+var kakariChip = '<button class="chip-btn ' + (row.kakari ? "active" : "") + '" style="flex:1;font-size:10px;padding:8px 3px;" onclick="toggleEditRowKakari(' + idx + ')">' + tr("かかり") + '</button>';
 var optgroups = TRICKS.filter(function (g) { return g.group !== "エアタイム" || category === "trampoline"; }).map(function (g) {
 var opts = g.items.filter(function (t) { return !t.trampolineOnly || category === "trampoline"; }).map(function (t) {
 return '<option value="' + t.id + '" ' + (row.trickId === t.id ? "selected" : "") + ">" + escHtml(tr(t.label)) + (t.code ? " (" + t.code + ")" : "") + "</option>";
@@ -2674,11 +2676,12 @@ return (
 (!isTrampoline && row.grabCategory === "grab" && row.grabType === "other" ? '<span class="code-badge">' + tr("グラブ(その他)") + '</span>' : "") +
 (row.nuki ? '<span class="code-badge" style="color:' + COLORS.amber + ';border-color:' + COLORS.amber + ';">' + tr("抜き") + '</span>' : "") +
 (row.unnatural ? '<span class="code-badge" style="color:' + COLORS.ice + ';border-color:' + COLORS.ice + ';">' + tr("アンナチュラル") + '</span>' : "") +
+(row.kakari ? '<span class="code-badge">' + tr("かかり") + '</span>' : "") +
 '<button class="remove-btn" onclick="removeEditRow(' + idx + ')" style="margin-left:auto;">' + iconMinus(14, COLORS.textFaint) + "</button>" +
 "</div>" +
 trickSelect +
 (isTrampoline ? '<div class="inline-row">' + modifierChips + "</div>" : '<div class="sub-label">' + tr("グラブ・ポジション") + '</div><div class="inline-row">' + modifierChips + "</div>" + renderGrabPickerHtml(idx, row, "setEditRowGrab", "setEditRowNear", "openEditGrabModal")) +
-'<div class="inline-row">' + nukiChip + unnaturalChip + "</div>" +
+'<div class="inline-row">' + nukiChip + unnaturalChip + kakariChip + "</div>" +
 '<div class="inline-row">' + countFields + "</div>" +
 (isTrampoline ? "" : ('<div class="sub-label" style="margin-top:8px;">' + tr("結果（任意）") + '</div><div class="inline-row">' + renderResultChipsHtml(idx, row, "setEditRowResult") + "</div>" + renderYurePanelHtml(idx, row, "toggleEditRowWobbleTag", "setEditRowWobbleSeverity"))) +
 (isTrampoline ? "" : renderSpeedSelectHtml(idx, row, "setEditRowSpeed")) +
