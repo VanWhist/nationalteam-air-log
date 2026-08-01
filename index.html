@@ -622,6 +622,17 @@ return VIDEOS.filter(function (v) { return v.entryId === entryId; });
 var VIDEO_CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
 var VIDEO_MAX_SIZE = 500 * 1024 * 1024; // 500MB
 
+/* 動画アップロードを許可する選手(暫定措置)。
+NTエアlogは現在、MICエアログのDropboxアプリの認証情報を借りて動画を保存しているため、
+保存先が /アプリ/MICエアログ動画/選手名/ になる。そこで、MICにも所属していてもともと
+同じ場所に動画がある林遼真(a86206408)だけに限定している。他の選手はNT専用のDropbox、
+またはJISSシェアを別途用意してから開放する。
+※Apps Script側(videoUploadStart_ / videoUploadFinish_)にも同じIDのガードがある。 */
+var VIDEO_ENABLED_ATHLETES = ["a86206408"];
+function videoUploadEnabled(athleteId) {
+return VIDEO_ENABLED_ATHLETES.indexOf(String(athleteId)) >= 0;
+}
+
 function videoListField(type) {
 if (type === "single") return "videos";
 if (type === "success") return "successVideos";
@@ -772,8 +783,11 @@ return uploadNext(index + 1);
 if (file.size > VIDEO_MAX_SIZE) {
 return Promise.reject(new Error("動画サイズが大きすぎます(上限" + Math.round(VIDEO_MAX_SIZE / (1024 * 1024)) + "MB)。"));
 }
-return apiPost({ type: "videoUploadStart" }).then(function (startRes) {
-if (!startRes || startRes.status !== "ok" || !startRes.sessionId) throw new Error("upload start failed");
+if (!videoUploadEnabled(athleteId)) {
+return Promise.reject(new Error("この選手は現在、動画アップロードに対応していません。"));
+}
+return apiPost({ type: "videoUploadStart", athleteId: athleteId || "" }).then(function (startRes) {
+if (!startRes || startRes.status !== "ok" || !startRes.sessionId) throw new Error(startRes && startRes.message ? startRes.message : "upload start failed");
 sessionId = startRes.sessionId;
 return uploadNext(0);
 });
@@ -810,6 +824,11 @@ rowIdx(そのentry.rows内でのインデックス)で対象行を特定する�
 (v1時代に作成された記録)は、動画を紐付けられるようupdateEntry_で新しいrowIdを1つだけ
 書き戻してから(他の行のrowIdはそのまま)アップロードを開始する。 */
 function dashVideoInputId(entryId, rowIdx, type) { return "dash-vid-" + entryId + "-" + rowIdx + "-" + type; }
+/* ダッシュボードの動画追加ボタンは、動画アップロードが有効な選手の記録にだけ表示する。 */
+function dashEntryAthleteId(entryId) {
+var e = DATA.filter(function (x) { return x.id === entryId; })[0];
+return e ? e.athlete : "";
+}
 function ensureRowId(entry, rowIdx) {
 var row = entry.rows[rowIdx];
 if (row.rowId) return Promise.resolve(row.rowId);
@@ -829,6 +848,7 @@ var files = inputEl.files;
 if (!files || !files.length) return;
 var entry = DATA.filter(function (e) { return e.id === entryId; })[0];
 if (!entry || !entry.rows[rowIdx]) { inputEl.value = ""; return; }
+if (!videoUploadEnabled(entry.athlete)) { inputEl.value = ""; return; }
 var trickId = entry.rows[rowIdx].trickId;
 var fileList = [];
 for (var i = 0; i < files.length; i++) fileList.push(files[i]);
@@ -1630,7 +1650,7 @@ renderTrickSelect(idx, row) +
 '<div class="inline-row">' + countFields + "</div>" +
 (isTrampoline ? "" : ('<div class="sub-label" style="margin-top:8px;">' + tr("結果（任意）") + '</div><div class="inline-row">' + renderResultChipsHtml(idx, row, "setRowResult") + "</div>" + renderYurePanelHtml(idx, row, "toggleRowWobbleTag", "setRowWobbleSeverity"))) +
 (isTrampoline ? "" : renderSpeedSelectHtml(idx, row, "setRowSpeed")) +
-'<div class="video-row single">' + renderVideoSlot(idx, "single", tr("動画(任意)")) + "</div>" +
+(videoUploadEnabled(S.athlete) ? '<div class="video-row single">' + renderVideoSlot(idx, "single", tr("動画(任意)")) + "</div>" : "") +
 renderTechRowNoteHtml(row, idx) +
 "</div>"
 );
@@ -2063,7 +2083,7 @@ return '<span class="recent-video-btn' + toneClass + '" style="opacity:.65;curso
 return '<button class="recent-video-btn fail-tone" onclick="retryQueueItem(\'' + entryId + "','" + rowId + "','" + type + "','" + item.id + '\')">' + tr("⚠再試行") + '</button>';
 }).join("");
 var addHtml = "";
-if (list.length < cap) {
+if (list.length < cap && videoUploadEnabled(dashEntryAthleteId(entryId))) {
 var inputId = dashVideoInputId(entryId, rowIdx, type);
 addHtml = '<label class="recent-video-btn' + toneClass + '" for="' + inputId + '" style="cursor:pointer;">' + iconPlus(9, type === "fail" ? COLORS.amber : COLORS.ice) + shortLabel + "(" + videoCapLabel(list.length, cap) + ')</label>' +
 '<input type="file" id="' + inputId + '" accept="video/*" multiple style="display:none" onchange="handleDashVideoFileChange(\'' + entryId + "'," + rowIdx + ",'" + type + "',this)\">";
