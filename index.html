@@ -1201,7 +1201,7 @@ return { rowId: genRowId(), trickId: defaultTrick, grabCategory: "none", grabTyp
 }
 var S = {
 dashRecentExpanded: false,
-dashChipsExpanded: {},dashGroupOpen: {},dashRankOpen: {},
+dashChipsExpanded: {},dashGroupOpen: {},dashRankOpen: {},dashFacRankOpen: {},
 dashNoteOpen: {},dashRowNoteOpen: {},refreshing: false,
 refreshError: "",
 
@@ -1761,26 +1761,29 @@ if (r.result === "success") return Number(r.reps) || 0;
 if (r.result === "fail") return 0;
 return null; // ヨレ・未選択・トランポリンは成功率計算に含めない
 }
+function rowFail(r) {
+if (r.reps === undefined) return Number(r.fail) || 0;
+if (r.result === "fail") return Number(r.reps) || 0;
+return 0;
+}
+function rowYure(r) {
+if (r.reps === undefined) return 0; // 旧データにヨレの概念はない
+if (r.result === "yure") return Number(r.reps) || 0;
+return 0;
+}
 function entryTotal(entry) {
 return entry.rows.reduce(function (sum, r) { return sum + rowTotal(r); }, 0);
 }
 function entrySuccess(entry) {
 return entry.rows.reduce(function (sum, r) { var s = rowSuccess(r); return sum + (s === null ? 0 : s); }, 0);
 }
-function trickTotals(entries) {
-var map = {};
-entries.forEach(function (e) {
-e.rows.forEach(function (r) {
-var key = trickLabel(r.trickId) + (r.nuki ? tr("（抜き）") : "") + (r.unnatural ? tr("（アンナチュラル）") : "");
-if (!map[key]) map[key] = { count: 0, success: 0, kakari: 0, speed: {}, lastDate: null };
-map[key].count += rowTotal(r);
-var s = rowSuccess(r);
-if (s !== null) map[key].success += s;
-if (r.kakari) map[key].kakari += 1;
-if (!map[key].lastDate || e.date > map[key].lastDate) map[key].lastDate = e.date;
-if (r.speedLevel) {
-if (!map[key].speed[r.speedLevel]) map[key].speed[r.speedLevel] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 };
-var sd = map[key].speed[r.speedLevel];
+/* 進入スピード別マップへの加算。技全体の集計にも、施設・台ごとの内訳にも同じロジックを使う。
+   result === "" (未選択) は成功/失敗/ヨレのどれにも数えないが、分母(unselected)には加える
+   ＝施設・台別カードの本数（rowTotalベース）と、ここでの合計本数を一致させるための扱い(コーチ確認済み)。 */
+function addSpeedToMap(speedMap, r) {
+if (!r.speedLevel) return;
+if (!speedMap[r.speedLevel]) speedMap[r.speedLevel] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0, unselected: 0 };
+var sd = speedMap[r.speedLevel];
 if (r.reps === undefined) {
 // 旧データ(reps列なし)は成功/失敗の集計をそのまま使う
 sd.success += Number(r.success) || 0;
@@ -1796,17 +1799,42 @@ sd.yure += repsForSpeed;
 var maxSeverity = (r.wobbleDetail || []).reduce(function (m, w) { return Math.max(m, Number(w.severity) || 0); }, 0);
 if (maxSeverity >= 3) sd.yureHigh += repsForSpeed;
 else if (maxSeverity >= 1) sd.yureLow += repsForSpeed;
+} else {
+sd.unselected += repsForSpeed;
 }
-// result === "" (未選択) はスピード別の成功率/ヨレ率の集計には含めない
 }
+}
+function trickTotals(entries) {
+var map = {};
+entries.forEach(function (e) {
+var facKey = e.facility ? (e.facility + "｜" + e.kicker) : null;
+e.rows.forEach(function (r) {
+var key = trickLabel(r.trickId) + (r.nuki ? tr("（抜き）") : "") + (r.unnatural ? tr("（アンナチュラル）") : "");
+if (!map[key]) map[key] = { count: 0, success: 0, fail: 0, yure: 0, kakari: 0, speed: {}, lastDate: null, facilities: {} };
+var s = rowSuccess(r), f = rowFail(r), y = rowYure(r), total = rowTotal(r);
+map[key].count += total;
+if (s !== null) map[key].success += s;
+map[key].fail += f;
+map[key].yure += y;
+if (r.kakari) map[key].kakari += 1;
+if (!map[key].lastDate || e.date > map[key].lastDate) map[key].lastDate = e.date;
+addSpeedToMap(map[key].speed, r);
+if (facKey) {
+if (!map[key].facilities[facKey]) map[key].facilities[facKey] = { facility: e.facility, kicker: e.kicker, count: 0, success: 0, fail: 0, yure: 0, speed: {} };
+var fb = map[key].facilities[facKey];
+fb.count += total;
+if (s !== null) fb.success += s;
+fb.fail += f;
+fb.yure += y;
+addSpeedToMap(fb.speed, r);
 }
 });
 });
-return Object.keys(map).map(function (k) { return { name: k, count: map[k].count, success: map[k].success, kakari: map[k].kakari, speed: map[k].speed, lastDate: map[k].lastDate }; }).sort(function (a, b) { return b.count - a.count; });
+return Object.keys(map).map(function (k) { return { name: k, count: map[k].count, success: map[k].success, fail: map[k].fail, yure: map[k].yure, kakari: map[k].kakari, speed: map[k].speed, lastDate: map[k].lastDate, facilities: map[k].facilities }; }).sort(function (a, b) { return b.count - a.count; });
 }
 function speedTotalsAggregate(totals) {
 var agg = {};
-SPEED_LEVELS.forEach(function (lv) { agg[lv.key] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 }; });
+SPEED_LEVELS.forEach(function (lv) { agg[lv.key] = { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0, unselected: 0 }; });
 totals.forEach(function (t) {
 SPEED_LEVELS.forEach(function (lv) {
 var d = t.speed[lv.key];
@@ -1816,6 +1844,7 @@ agg[lv.key].fail += d.fail;
 agg[lv.key].yure += d.yure || 0;
 agg[lv.key].yureLow += d.yureLow || 0;
 agg[lv.key].yureHigh += d.yureHigh || 0;
+agg[lv.key].unselected += d.unselected || 0;
 }
 });
 });
@@ -1831,11 +1860,12 @@ return '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:9.5px;color:'
 }
 function renderSpeedBreakdownHtml(speedMap) {
 return SPEED_LEVELS.map(function (lv) {
-var d = speedMap[lv.key] || { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0 };
+var d = speedMap[lv.key] || { success: 0, fail: 0, yure: 0, yureLow: 0, yureHigh: 0, unselected: 0 };
 var yure = d.yure || 0;
 var yureLow = d.yureLow || 0;
 var yureHigh = d.yureHigh || 0;
-var total = d.success + d.fail + yure;
+var unselected = d.unselected || 0;
+var total = d.success + d.fail + yure + unselected;
 var rate = total > 0 ? Math.round((d.success / total) * 100) : null;
 var yureRate = total > 0 ? Math.round((yure / total) * 100) : null;
 var successPct = total > 0 ? (d.success / total) * 100 : 0;
@@ -1848,9 +1878,8 @@ var barHtml = total > 0
 '<div style="width:' + yurePct + '%;background:' + COLORS.amber + ';"></div>' +
 '</div>'
 : "";
-var lowSample = total > 0 && total < SAMPLE_REFERENCE_THRESHOLD;
-var rateLabel = rate === null ? "-" : tr("成功{r}%", { r: rate }) + (lowSample ? "(" + d.success + "/" + total + ")" : "");
-var yureLabel = (yure > 0 && yureRate !== null) ? tr(" ・ヨレ{r}%", { r: yureRate }) + (lowSample ? "(" + yure + "/" + total + ")" : "") : "";
+var rateLabel = rate === null ? "-" : tr("成功{r}%", { r: rate }) + "(" + d.success + "/" + total + ")";
+var yureLabel = (yure > 0 && yureRate !== null) ? tr(" ・ヨレ{r}%", { r: yureRate }) + "(" + yure + "/" + total + ")" : "";
 var unknownSeverity = yure - yureLow - yureHigh;
 var yureDetailHtml = (yure > 0 && (yureLow > 0 || yureHigh > 0))
 ? '<div style="font-size:9.5px;color:' + COLORS.textFaint + ';margin:0 0 6px 112px;">' + escHtml(tr("ヨレ内訳：浅め(1〜2) {low}件 ・ 深め(3〜5) {high}件", { low: yureLow, high: yureHigh }) + (unknownSeverity > 0 ? tr(" ・評価なし {n}件", { n: unknownSeverity }) : "")) + '</div>'
@@ -2147,11 +2176,9 @@ arr.sort(function (a, b) { return b.count - a.count; });
 }
 return arr;
 }
-/* 進入スピード内訳で、1スピード帯あたりの本数が少ない場合は成功率が極端な値に振れやすいため「参考値」であることを明示する。
-   閾値はコーチ確認済み(1スピード帯30本未満)。技別ランキングの合計本数には適用しない(コーチ確認済み：全体本数は参考値表示なし)。 */
-var SAMPLE_REFERENCE_THRESHOLD = 30;
 function toggleDashChips(entryId) { S.dashChipsExpanded[entryId] = !S.dashChipsExpanded[entryId]; render(); } function toggleDashGroup(id) { S.dashGroupOpen[id] = !S.dashGroupOpen[id]; render(); }
 function toggleDashRank(id) { S.dashRankOpen[id] = !S.dashRankOpen[id]; render(); }
+function toggleDashFacRank(id) { S.dashFacRankOpen[id] = !S.dashFacRankOpen[id]; render(); }
 function toggleDashNote(entryId) { S.dashNoteOpen[entryId] = !S.dashNoteOpen[entryId]; render(); }
 function toggleDashRowNote(rowId) { S.dashRowNoteOpen[rowId] = !S.dashRowNoteOpen[rowId]; render(); }
 function renderDashPeriodChipsHtml() {
@@ -2159,6 +2186,48 @@ var opts = ["all", "30d", "season"];
 return '<div style="display:flex;gap:6px;margin-bottom:10px;">' + opts.map(function (p) {
 return '<button class="chip-btn' + (S.dashPeriod === p ? " active" : "") + '" style="font-size:11px;padding:6px 10px;flex:1;" onclick="setDashPeriod(\'' + p + '\')">' + dashPeriodLabel(p) + "</button>";
 }).join("") + "</div>";
+}
+/* 技別ランキング／施設・台内訳、共通で使うセグメント帯（成功=氷色／失敗=赤／ヨレ=琥珀）。
+   innerPctは外枠(rank-bar-wrap等)に対するバー自体の長さ(累計本数の相対値)、その中を実数の内訳で塗り分ける。 */
+function rankSegBarHtml(agg, innerPct) {
+var count = agg.count;
+var successPct = count > 0 ? (agg.success / count) * 100 : 0;
+var failPct = count > 0 ? (agg.fail / count) * 100 : 0;
+var yurePct = count > 0 ? (agg.yure / count) * 100 : 0;
+return '<div style="width:' + innerPct + '%;height:100%;display:flex;">' +
+'<div style="width:' + successPct + '%;background:' + COLORS.ice + ';"></div>' +
+'<div style="width:' + failPct + '%;background:#E5484D;"></div>' +
+'<div style="width:' + yurePct + '%;background:' + COLORS.amber + ';"></div>' +
+"</div>";
+}
+/* 「成功75%(96/128)・ヨレ16%」の形式。分母(count)には結果未入力も含む(コーチ確認済み)。 */
+function rankCountLabel(agg) {
+var count = agg.count;
+if (count <= 0) return "-";
+var rate = Math.round((agg.success / count) * 100);
+var label = tr("成功{r}%", { r: rate }) + "(" + agg.success + "/" + count + ")";
+if (agg.yure > 0) label += tr(" ・ヨレ{r}%", { r: Math.round((agg.yure / count) * 100) });
+return label;
+}
+/* 技別ランキングを開いたときの中身。施設と台を「O-air ／ 9番台」のように1行にまとめ(コーチ確認済み：施設ごとの合計は
+   既存の「施設・台別 技別本数」カードで見られるため2段のままでよい)、本数の多い順に全て並べる。行をタップすると、
+   その施設・台での進入スピード別の内訳が開く。 */
+function renderTrickFacilityDetailHtml(t, rankId) {
+var facArr = Object.keys(t.facilities).map(function (fk) { return t.facilities[fk]; });
+facArr.sort(function (a, b) { return b.count - a.count; });
+return facArr.map(function (f) {
+var facId = rankId + "-fac-" + encodeURIComponent(f.facility + "｜" + f.kicker);
+var fOpen = !!S.dashFacRankOpen[facId];
+var hasSpeed = Object.keys(f.speed).some(function (k) { var d = f.speed[k]; return (d.success + d.fail + (d.yure || 0) + (d.unselected || 0)) > 0; });
+var fChevron = hasSpeed ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (fOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
+var head = '<div style="display:flex;align-items:center;gap:8px;padding:5px 3px;border-radius:6px;' + (hasSpeed ? "cursor:pointer;" : "") + '"' + (hasSpeed ? (' onclick="toggleDashFacRank(\'' + facId + '\')"') : "") + '>' +
+'<span style="font-size:11px;width:104px;flex-shrink:0;color:#EAF1F8;">' + escHtml(tr(f.facility) + "／" + tr(f.kicker)) + '</span>' +
+'<div style="flex:1;height:7px;border-radius:4px;background:#1B2C42;overflow:hidden;display:flex;">' + rankSegBarHtml(f, 100) + '</div>' +
+'<span style="font-size:9.5px;font-family:ui-monospace,monospace;width:150px;text-align:right;flex-shrink:0;color:#8CA0B8;">' + rankCountLabel(f) + fChevron + "</span>" +
+"</div>";
+var detail = fOpen ? ('<div style="margin:2px 0 8px 12px;padding-left:8px;border-left:1px solid #26374E;">' + renderSpeedBreakdownHtml(f.speed) + "</div>") : "";
+return head + detail;
+}).join("");
 }
 function renderAthleteDashboard() {
 var rawEntries = getEntries(S.dashAthlete, S.dashCategory);
@@ -2193,15 +2262,15 @@ var statGrid =
 var maxCount = totals.length ? totals.reduce(function (m, t) { return Math.max(m, t.count); }, 1) : 1;
 var rankHtml = totals.slice(0, 6).map(function (t) {
 var pct = Math.round((t.count / maxCount) * 100);
-var trate = isWater && t.count > 0 ? Math.round((t.success / t.count) * 100) : null;
-var countLabel = isWater ? (t.success + "/" + t.count + tr("本")) : (t.count + tr("本"));
+var countLabel = isWater ? rankCountLabel(t) : (t.count + tr("本"));
 var kakariLabel = (!isWater && t.kakari > 0) ? tr(" ・かかり×{n}", { n: t.kakari }) : "";
-var hasSpeedData = isWater && Object.keys(t.speed).some(function (k) { var d = t.speed[k]; return (d.success + d.fail + (d.yure || 0)) > 0; });
+var hasFacilities = isWater && t.facilities && Object.keys(t.facilities).length > 0;
 var rankId = "rank-" + encodeURIComponent(t.name);
-var isOpen = hasSpeedData && !!S.dashRankOpen[rankId];
-var chevron = hasSpeedData ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
-var head = '<div class="rank-item"' + (hasSpeedData ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + '</span><div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%"></div></div><span class="rank-count">' + countLabel + (trate !== null ? tr(" ・ ") + trate + "%" : "") + kakariLabel + chevron + "</span></div>";
-var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + speedLegendHtml() + renderSpeedBreakdownHtml(t.speed) + "</div>") : "";
+var isOpen = hasFacilities && !!S.dashRankOpen[rankId];
+var chevron = hasFacilities ? (' <span class="chevron" style="display:inline-block;transition:transform .15s ease;transform:' + (isOpen ? "rotate(90deg)" : "rotate(0deg)") + ';">▸</span>') : "";
+var barInner = isWater ? rankSegBarHtml(t, pct) : ('<div class="rank-bar" style="width:' + pct + '%"></div>');
+var head = '<div class="rank-item"' + (hasFacilities ? ' style="cursor:pointer;" onclick="toggleDashRank(\'' + rankId + '\')"' : "") + '><span class="rank-name">' + escHtml(t.name) + '</span><div class="rank-bar-wrap">' + barInner + '</div><span class="rank-count" style="width:' + (isWater ? "150px" : "78px") + ';">' + countLabel + kakariLabel + chevron + "</span></div>";
+var detailHtml = isOpen ? ('<div style="margin-top:6px;margin-bottom:2px;padding:8px 8px 2px;border-radius:8px;background:#0F1929;border:1px dashed #26374E;">' + speedLegendHtml() + renderTrickFacilityDetailHtml(t, rankId) + "</div>") : "";
 return head + detailHtml;
 }).join("");
 var overallSpeedCard = (isWater && totals.some(function (t) { return Object.keys(t.speed).length > 0; })) ? ('<div class="card"><div class="recent-title">' + tr("進入スピード別 成功率・ヨレ率(全技合算)") + '</div>' + speedLegendHtml() + renderSpeedBreakdownHtml(speedTotalsAggregate(totals)) + "</div>") : "";
@@ -2310,7 +2379,7 @@ bestTimeCard +
 renderTrendChartHtml("chart-total", trend, 150) +
 "</div>" +
 airtimeChartCard +
-'<div class="card"><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>' + tr("技別 累計本数") + (isWater ? tr("・成功率") : "") + '</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRankSort()">' + dashRankSortLabel(S.dashRankSort) + '</button></div>' + (isWater ? '<div class="rank-count-cap" style="margin:-2px 0 6px;">' + tr("バーの長さ＝累計本数／右側＝成功本数/本数・成功率") + '</div>' : "") + '<div class="rank-list">' + rankHtml + "</div></div>" +
+'<div class="card"><div class="recent-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>' + tr("技別 累計本数") + (isWater ? tr("・成功率") : "") + '</span><button class="chip-btn" style="font-size:11px;padding:3px 8px;" onclick="cycleDashRankSort()">' + dashRankSortLabel(S.dashRankSort) + '</button></div>' + (isWater ? '<div class="rank-count-cap" style="margin:-2px 0 6px;">' + tr("バーの長さ＝累計本数／色＝成功・失敗・ヨレの内訳／右側＝成功率(成功本数/本数)・ヨレ率") + '</div>' : "") + '<div class="rank-list">' + rankHtml + "</div></div>" +
 overallSpeedCard +
 renderVideoGalleryCard(entries) +
 '<div><div class="recent-title">' + tr("直近の記録") + '</div><div class="recent-list">' + recentHtml + "</div>" + (recentHiddenCount > 0 ? '<button class="chip-btn" style="margin-top:8px;font-size:11px;padding:6px 10px;width:100%;" onclick="toggleDashRecentExpanded()">' + (S.dashRecentExpanded ? tr("閉じる") : tr("＋過去の記録を見る ({n}件)", { n: recentHiddenCount })) + "</button>" : "") + "</div>" +
