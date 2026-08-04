@@ -515,6 +515,8 @@ var EN = {
 "保存に失敗しました。通信状況を確認してもう一度お試しください。": "Could not save. Check your connection and try again.",
 "削除に失敗しました。通信状況を確認してもう一度お試しください。": "Could not delete. Check your connection and try again.",
 "データの読み込みに失敗しました。通信状況を確認して、画面を再読み込みしてください。": "Could not load data. Check your connection and reload the page.",
+"データを読み込めませんでした。サーバーが混み合っている可能性があります。少し待ってから再読み込みしてください。": "Could not load your data. The server may be busy. Please wait a moment and reload.",
+"再読み込み": "Reload",
 };
 
 /* 表示用の文言を取り出す。ENに無いキーは日本語のまま返す(未翻訳でも画面は壊れない)。 */
@@ -553,13 +555,40 @@ return m ? decodeURIComponent(m[1]) : "";
 } catch (e) { return ""; }
 })();
 var IS_SCOPED = false;
+/* サーバーから一度でも正常にデータを取得できたか。読み込み中や読み込み失敗中は
+まだ「サーバーが絞り込みを返さなかった」とは言えないので、この判定に使う。 */
+var SERVER_LOAD_OK = false;
 /* トークン付きURLなのにサーバーが絞り込みを返していない = バックエンド未対応の状態。
-制限がかかっていると誤解されるのが一番危険なので、この場合は明示的に警告を出す。 */
-function tokenPresentButNotEnforced() { return !!URL_TOKEN && !IS_SCOPED; }
+制限がかかっていると誤解されるのが一番危険なので、この場合は明示的に警告を出す。
+ただし「読み込み中」「読み込み失敗中」はIS_SCOPEDがまだfalseなだけであって、
+バックエンドが未対応とは限らない。ここで警告を出すと、通信が一時的に失敗した
+だけの選手に「あなたのリンクは効いていない」と誤解させてしまうため、
+サーバー応答が取れた場合(SERVER_LOAD_OK)に限って表示する。 */
+function tokenPresentButNotEnforced() { return !!URL_TOKEN && SERVER_LOAD_OK && !IS_SCOPED; }
+
+/* 選手リストが空のとき「選手を追加」フォームを出してよいか。
+読み込みに失敗しただけの状態でこのフォームを出すと、選手が「自分が登録されていない」と
+思い込んで自分の名前をもう一度登録し、名簿が重複してしまう。名簿が壊れると過去の記録との
+紐付けまで崩れるので、サーバーから正常な応答が取れたときだけ追加を許可する。
+また選手専用リンク(?token=)で開いている場合は、そもそも選手が名簿を編集する場面ではない。 */
+function allowAddAthleteWhenEmpty() { return SERVER_LOAD_OK && !URL_TOKEN; }
+function renderLoadFailedNotice() {
+return (
+'<div class="sub-label">' + tr("データを読み込めませんでした。サーバーが混み合っている可能性があります。少し待ってから再読み込みしてください。") + '</div>' +
+'<button type="button" class="add-row-btn" style="margin-top:8px;" onclick="reloadApp()">' + tr("再読み込み") + '</button>'
+);
+}
+function reloadApp() { try { location.reload(); } catch (e) {} }
 
 function apiGet() {
 var url = API_URL + (URL_TOKEN ? "?token=" + encodeURIComponent(URL_TOKEN) : "");
-return fetch(url).then(function (res) { return res.json(); });
+return fetch(url).then(function (res) {
+/* Apps Scriptは混雑時にJSONではなくHTMLのエラーページ(404など)を返すことがある。
+そのまま res.json() すると "Unexpected token '<'" という分かりにくい例外になるので、
+ここでHTTPステータスを見て「一時的な失敗」として扱えるエラーにしておく。 */
+if (!res.ok) throw new Error("HTTP " + res.status);
+return res.json();
+});
 }
 function apiPost(payload) {
 /* 保存系リクエストにもトークンを載せる。閲覧(GET)だけ絞っても、書き込みが無防備だと
@@ -614,6 +643,19 @@ function refreshData() {
 return apiGet().then(function (data) {
 applyData(data);
 saveCache(data);
+SERVER_LOAD_OK = true;
+});
+}
+/* Apps Scriptはコールドスタートや混雑で、数十秒かかった末にHTTP 404を返すことがある。
+実測でも9回中2回が失敗し、少し待つと回復した。1回きりの失敗で選手にエラー画面を
+見せてしまうと「自分のリンクが壊れた」と誤解されるので、間隔を空けて数回やり直す。 */
+function refreshDataWithRetry(attempts, delayMs) {
+var left = (typeof attempts === "number") ? attempts : 3;
+var wait = (typeof delayMs === "number") ? delayMs : 1500;
+return refreshData().catch(function (err) {
+if (left <= 1) throw err;
+return new Promise(function (resolve) { setTimeout(resolve, wait); })
+.then(function () { return refreshDataWithRetry(left - 1, Math.min(wait * 2, 8000)); });
 });
 }
 /* サーバー確認済みの動画(VIDEOS)を行(rowId)単位で検索する。rowId/typeが記録されている
@@ -623,7 +665,7 @@ if (S.refreshing) return;
 S.refreshing = true;
 S.refreshError = "";
 render();
-refreshData().then(function () {
+refreshDataWithRetry(2, 1500).then(function () {
 S.refreshing = false;
 render();
 }).catch(function (err) {
@@ -1693,7 +1735,9 @@ return '<option value="' + a.id + '" ' + (selectedId === a.id ? "selected" : "")
 function renderRecordTab() {
 var athleteSection;
 if (!hasAthletes()) {
-athleteSection = '<div class="sub-label">' + tr("選手が登録されていません。まず選手名を追加してください。") + '</div>' + renderAddAthleteForm("record");
+athleteSection = allowAddAthleteWhenEmpty()
+? '<div class="sub-label">' + tr("選手が登録されていません。まず選手名を追加してください。") + '</div>' + renderAddAthleteForm("record")
+: renderLoadFailedNotice();
 } else if (IS_SCOPED) {
 /* サーバーが1人分に絞って返しているので、選手を選ぶ操作自体を置かない
 (他人の名前のまま記録してしまう事故を防ぐため)。 */
@@ -2534,7 +2578,9 @@ return (
 
 function renderTeamDashboard() {
 if (!hasAthletes()) {
-return '<div class="empty-card">' + tr("まだ選手が登録されていません。「選手」欄から名前を追加してください。") + '</div>';
+return allowAddAthleteWhenEmpty()
+? '<div class="empty-card">' + tr("まだ選手が登録されていません。「選手」欄から名前を追加してください。") + '</div>'
+: '<div class="empty-card">' + renderLoadFailedNotice() + '</div>';
 }
 var modeToggle =
 '<div class="tabs" style="margin:0 0 12px;">' +
@@ -2932,7 +2978,7 @@ if (!usedCache) {
 S.loading = true;
 renderLoading();
 }
-refreshData().then(function () {
+refreshDataWithRetry(3, 1500).then(function () {
 S.loading = false;
 S.refreshing = false;
 S.loadError = "";
