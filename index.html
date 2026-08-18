@@ -767,7 +767,7 @@ if (!item.file) { done(); return; }
 item.status = "uploading";
 item.progress = 0;
 render();
-uploadVideoFile(item.file, item.entryId, item.rowId, item.trickId, item.type, item.athleteId, item.date, item.trickLabel, function (pct) {
+uploadVideoFile(item, function (pct) {
 item.progress = pct;
 render();
 }).then(function () {
@@ -805,7 +805,13 @@ reader.readAsDataURL(file.slice(start, end));
 });
 }
 
-function uploadVideoFile(file, entryId, rowId, trickId, type, athleteId, date, trickLabel, onProgress) {
+/* item は videoQueue に積まれるキュー項目そのもの。保存先フォルダとファイル名はApps Script側で
+組み立てるので、そこで必要になる項目(グラブ/ニア/結果/スピード)も一緒に送る必要がある。
+引数を1つずつ増やしていくと呼び出し側と順番がずれても気付けないため、項目ごと渡す形にした。 */
+function uploadVideoFile(item, onProgress) {
+var file = item.file;
+var entryId = item.entryId, rowId = item.rowId, trickId = item.trickId, type = item.type;
+var athleteId = item.athleteId, date = item.date, trickLabel = item.trickLabel;
 var totalSize = file.size;
 var sessionId = null;
 var offset = 0;
@@ -830,6 +836,12 @@ athleteName: athleteName(athleteId) || "",
 fileName: file.name || "video.mp4",
 date: date || "",
 trickLabel: trickLabel || "",
+/* 保存先のファイル名に埋め込む項目。コーチがDropboxやPCのフォルダを見ただけで
+中身が分かるようにするため。値が無い項目は空文字のまま送り、区切りはApps Script側で残す。 */
+grabType: item.grabType || "",
+near: item.near || "",
+result: item.result || "",
+speedLevel: item.speedLevel || "",
 }).then(function (finishRes) {
 if (!finishRes || finishRes.status !== "ok") throw new Error("upload finish failed");
 if (onProgress) onProgress(100);
@@ -931,7 +943,7 @@ var existingCount = videosForRow(entryId, rowId, type).length + pendingListFor(e
 var newItems = [];
 fileList.forEach(function (file) {
 if (existingCount + newItems.length >= cap) return;
-newItems.push({ id: nextVideoItemId(), entryId: entryId, rowId: rowId, trickId: trickId, type: type, athleteId: entry.athlete, date: entry.date, trickLabel: trickLabelRaw(trickId), name: file.name, url: URL.createObjectURL(file), status: "pending", progress: 0, file: file });
+newItems.push({ id: nextVideoItemId(), entryId: entryId, rowId: rowId, trickId: trickId, type: type, athleteId: entry.athlete, date: entry.date, trickLabel: trickLabelRaw(trickId), grabType: row.grabType || "", near: row.near || "", result: row.result || "", speedLevel: row.speedLevel || "", name: file.name, url: URL.createObjectURL(file), status: "pending", progress: 0, file: file });
 });
 if (newItems.length) { addPendingItems(entryId, rowId, type, newItems); render(); enqueueVideoUploads(newItems); }
 else render();
@@ -1477,6 +1489,10 @@ item.type = group.type;
 item.athleteId = athleteId;
 item.date = S.date;
 item.trickLabel = r.trickLabel;
+item.grabType = r.grabType || "";
+item.near = r.near || "";
+item.result = r.result || "";
+item.speedLevel = r.speedLevel || "";
 queueItems.push(item);
 addPendingItems(entryId, r.rowId, group.type, [item]);
 });
