@@ -517,6 +517,63 @@ var EN = {
 "データの読み込みに失敗しました。通信状況を確認して、画面を再読み込みしてください。": "Could not load data. Check your connection and reload the page.",
 "データを読み込めませんでした。サーバーが混み合っている可能性があります。少し待ってから再読み込みしてください。": "Could not load your data. The server may be busy. Please wait a moment and reload.",
 "再読み込み": "Reload",
+
+/* ---- ログイン・初回設定・招待 ---- */
+"他のサービスと同じパスワードは使わないでください。": "Do not reuse a password from another service.",
+"このアプリはパスワードを暗号化して保管していますが、専用の仕組みほど強くはありません。ここだけで使うパスワードにしてください。": "This app stores passwords encrypted, but not as strongly as a dedicated password system. Please use a password you use only here.",
+
+"あとで": "Later",
+"メールアドレスとパスワードを設定しておくと、次からリンクが無くても入れます。今すぐでなくても、これまでどおり記録できます。": "If you set an email address and password, you can sign in without this link next time. There is no rush - you can keep recording just as before.",
+
+"ヘッドコーチ": "Head Coach",
+"チーフコーチ": "Chief Coach",
+"セクレタリー": "Secretary",
+"テクニカルコーチ": "Technical Coach",
+"アシスタントコーチ": "Assistant Coach",
+"チーフドクター": "Chief Doctor",
+"ドクター": "Doctor",
+"理学療法士": "Physiotherapist",
+"ストレングスコーチ": "Strength Coach",
+"栄養士": "Nutritionist",
+"情報分析": "Performance Analyst",
+"拠点理学療法士": "Base Physiotherapist",
+"ログイン": "Log in",
+"ログアウト": "Log out",
+"ログアウトしました。": "You have been logged out.",
+"ログアウトします。この端末では次回からメールアドレスとパスワードの入力が必要になります。": "You will be logged out. Next time on this device you will need your email address and password.",
+"初回設定": "First-time setup",
+"メールアドレス": "Email address",
+"パスワード": "Password",
+"パスワード（10文字以上）": "Password (10 characters or more)",
+"パスワード（確認用）": "Password (confirm)",
+"新しいパスワード（10文字以上）": "New password (10 characters or more)",
+"新しいパスワード（確認用）": "New password (confirm)",
+"新しいパスワードの設定": "Set a new password",
+"パスワードの再設定": "Reset your password",
+"パスワードをお忘れの方": "Forgot your password?",
+"再設定リンクを送る": "Send reset link",
+"ログイン画面に戻る": "Back to login",
+"設定する": "Save",
+"設定中…": "Saving…",
+"確認中…": "Checking…",
+"あとで設定する": "Set up later",
+"スタッフ": "Staff",
+"あなたはスタッフとして登録されます。": "You are being registered as a staff member.",
+"メールアドレスとパスワードを決めてください。次回からはこの2つでログインします。": "Choose an email address and password. You will use them to log in from now on.",
+"次からはリンクが無くても、メールアドレスとパスワードで入れるようになります。": "From next time you can sign in with your email address and password, without the link.",
+"登録済みのメールアドレスに、再設定用のリンクをお送りします。リンクは30分間・1回だけ有効です。": "We will email a reset link to your registered address. The link is valid for 30 minutes and can be used once.",
+"他のサービスと同じパスワードは使わないでください。このアプリはパスワードを暗号化して保管していますが、専用の仕組みほど強くはありません。": "Please do not reuse a password from another service. This app stores passwords encrypted, but not as strongly as a dedicated password system.",
+"メールアドレスとパスワードを入力してください。": "Please enter your email address and password.",
+"メールアドレスを入力してください。": "Please enter your email address.",
+"パスワードは10文字以上にしてください。": "Password must be at least 10 characters.",
+"パスワード（確認用）が一致しません。": "The confirmation password does not match.",
+"うまくいきませんでした。通信状況を確認してもう一度お試しください。": "That did not work. Check your connection and try again.",
+"通信に失敗しました。電波の良い場所でもう一度お試しください。": "Connection failed. Please move somewhere with a better signal and try again.",
+"このリンクは有効ではありません": "This link is not valid",
+"ログインが必要です": "Login required",
+"メールアドレスとパスワードでログインしてください。": "Please log in with your email address and password.",
+"リンクが途中で切れているか、古くなっている可能性があります。メールアドレスとパスワードを設定済みの方は、下からログインできます。": "The link may have been truncated or may be out of date. If you have already set an email address and password, you can log in below.",
+"設定がお済みでない方や、うまくいかない場合は城さんにご連絡ください。": "If you have not set up your account yet, or if this keeps happening, please contact Van.",
 };
 
 /* 表示用の文言を取り出す。ENに無いキーは日本語のまま返す(未翻訳でも画面は壊れない)。 */
@@ -534,7 +591,10 @@ if (lang !== "ja" && lang !== "en") return;
 LANG = lang;
 try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch (e) {}
 document.documentElement.lang = lang;
-if (S.loading) { renderLoading(); } else { render(); }
+/* ログイン系の画面では、その画面を描き直す。ここでrenderLoading()に落ちると、
+言語を切り替えた瞬間にログイン画面が消えて「読み込み中」に飛んでしまう。 */
+if (authScreenActive()) { renderAuthScreen(); }
+else if (S.loading) { renderLoading(); } else { render(); }
 }
 function renderLangToggle() {
 return '<div class="lang-toggle" role="group" aria-label="Language">' +
@@ -554,6 +614,69 @@ var m = location.search.match(/[?&]token=([^&]+)/);
 return m ? decodeURIComponent(m[1]) : "";
 } catch (e) { return ""; }
 })();
+
+/* ---- ログイン状態 ----
+ログイン機能の役割は「メールアドレスとパスワードが正しければ、その人のトークンを返す」の1点だけ。
+返ってきたトークンをここに保存し、以降のリクエストは今までとまったく同じ形で飛ぶ。
+データの読み書きの経路は一切変えていない。 */
+var AUTH_STORAGE_KEY = "ntairlog_auth_v1";
+var AUTH = (function () {
+try {
+var s = localStorage.getItem(AUTH_STORAGE_KEY);
+if (!s) return null;
+var a = JSON.parse(s);
+return (a && a.role) ? a : null;
+} catch (e) { return null; }
+})();
+/* パスワード再設定メールのリンク(?reset=)から開いたときのトークン。 */
+var RESET_TOKEN = (function () {
+try {
+var m = location.search.match(/[?&]reset=([^&]+)/);
+return m ? decodeURIComponent(m[1]) : "";
+} catch (e) { return ""; }
+})();
+/* スタッフの招待リンク(?invite=)から開いたときのトークン。 */
+var INVITE_TOKEN = (function () {
+try {
+var m = location.search.match(/[?&]invite=([^&]+)/);
+return m ? decodeURIComponent(m[1]) : "";
+} catch (e) { return ""; }
+})();
+
+/* 実際にサーバーへ送るトークン。
+ログイン中は「ログインで得たトークン」だけを使い、URLの?token=にはフォールバックしない。
+以前に他の選手の個人リンクで開いたことがある端末で、そのトークンが混ざるのを防ぐため。
+コーチはトークンを持たない(空文字)ので、従来のコーチ用URLと同じ扱いになる。 */
+function effectiveToken() {
+if (AUTH) return AUTH.token || "";
+return URL_TOKEN;
+}
+function saveAuth(a) {
+AUTH = a;
+try { localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(a)); } catch (e) {}
+}
+/* データキャッシュを、今のキーだけでなく全部消す。
+共用のパソコンでは、選手A→選手B→コーチ、と別の人が同じ端末を使う。今のキーだけ消すと
+他の人のキーが端末に残り、その人が次にログインしたときに古い内容が一瞬表示される。
+キャッシュは速く見せるためだけのものなので、迷ったら消す方に倒してよい。 */
+function clearAllCaches() {
+try {
+var keys = [];
+for (var i = 0; i < localStorage.length; i++) {
+var k = localStorage.key(i);
+if (k && k.indexOf("ntairlog_cache_v1_") === 0) keys.push(k);
+}
+keys.forEach(function (k) { localStorage.removeItem(k); });
+} catch (e) {}
+}
+/* ログアウトでは認証トークンとデータキャッシュの両方を消す。
+片方だけ消すと、次に開いた人に前の人のデータが見えてしまう。 */
+function clearAuth() {
+clearAllCaches();
+try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (e) {}
+AUTH = null;
+}
+
 var IS_SCOPED = false;
 /* サーバーから一度でも正常にデータを取得できたか。読み込み中や読み込み失敗中は
 まだ「サーバーが絞り込みを返さなかった」とは言えないので、この判定に使う。 */
@@ -564,14 +687,17 @@ var SERVER_LOAD_OK = false;
 バックエンドが未対応とは限らない。ここで警告を出すと、通信が一時的に失敗した
 だけの選手に「あなたのリンクは効いていない」と誤解させてしまうため、
 サーバー応答が取れた場合(SERVER_LOAD_OK)に限って表示する。 */
-function tokenPresentButNotEnforced() { return !!URL_TOKEN && SERVER_LOAD_OK && !IS_SCOPED; }
+/* スタッフはトークンを持っていても全員分が見えるのが正しいので、この警告の対象外にする。
+スタッフに「制限が効いていません」と出しても意味が無いどころか、不具合だと誤解させる。 */
+function isStaffSession() { return !!(AUTH && AUTH.role === "staff"); }
+function tokenPresentButNotEnforced() { return !!effectiveToken() && !isStaffSession() && SERVER_LOAD_OK && !IS_SCOPED; }
 
 /* 選手リストが空のとき「選手を追加」フォームを出してよいか。
 読み込みに失敗しただけの状態でこのフォームを出すと、選手が「自分が登録されていない」と
 思い込んで自分の名前をもう一度登録し、名簿が重複してしまう。名簿が壊れると過去の記録との
 紐付けまで崩れるので、サーバーから正常な応答が取れたときだけ追加を許可する。
 また選手専用リンク(?token=)で開いている場合は、そもそも選手が名簿を編集する場面ではない。 */
-function allowAddAthleteWhenEmpty() { return SERVER_LOAD_OK && !URL_TOKEN; }
+function allowAddAthleteWhenEmpty() { return SERVER_LOAD_OK && (isStaffSession() || !effectiveToken()); }
 function renderLoadFailedNotice() {
 return (
 '<div class="sub-label">' + tr("データを読み込めませんでした。サーバーが混み合っている可能性があります。少し待ってから再読み込みしてください。") + '</div>' +
@@ -581,7 +707,8 @@ return (
 function reloadApp() { try { location.reload(); } catch (e) {} }
 
 function apiGet() {
-var url = API_URL + (URL_TOKEN ? "?token=" + encodeURIComponent(URL_TOKEN) : "");
+var tok = effectiveToken();
+var url = API_URL + (tok ? "?token=" + encodeURIComponent(tok) : "");
 return fetch(url).then(function (res) {
 /* Apps Scriptは混雑時にJSONではなくHTMLのエラーページ(404など)を返すことがある。
 そのまま res.json() すると "Unexpected token '<'" という分かりにくい例外になるので、
@@ -594,10 +721,11 @@ function apiPost(payload) {
 /* 保存系リクエストにもトークンを載せる。閲覧(GET)だけ絞っても、書き込みが無防備だと
 他人になりすまして記録できてしまうため。Apps Script側が未対応の間は単に無視される。 */
 var body = payload;
-if (URL_TOKEN) {
+var tok = effectiveToken();
+if (tok && !payload.token) {
 body = {};
 for (var k in payload) { if (Object.prototype.hasOwnProperty.call(payload, k)) { body[k] = payload[k]; } }
-body.token = URL_TOKEN;
+body.token = tok;
 }
 return fetch(API_URL, {
 method: "POST",
@@ -609,7 +737,7 @@ function applyData(data) {
 ATHLETES = (data.athletes || []).map(function (a) { return { id: a.id, name: a.name }; });
 DATA = data.records || [];
 VIDEOS = data.videos || [];
-IS_SCOPED = !!(data.scoped === true && URL_TOKEN && ATHLETES.length === 1);
+IS_SCOPED = !!(data.scoped === true && effectiveToken() && ATHLETES.length === 1);
 recentAthleteIds = computeRecentAthleteIds();
 if (IS_SCOPED) {
 S.athlete = ATHLETES[0].id;
@@ -621,11 +749,18 @@ Apps Scriptのレスポンスは(コールドスタート込みで)数秒かか�
 内容をそのまま描画し、裏で最新を取りに行って差し替える。2回目以降の体感を「待たされない」
 ものにするのが目的。
 キャッシュキーにトークンを含めるのが重要:トークンごとに見えるデータが違うので、
-同じ端末を別の選手リンクで開いたときに前の選手のデータが残ってはいけない。 */
-var CACHE_KEY = "ntairlog_cache_v1_" + (URL_TOKEN || "all");
+同じ端末を別の選手リンクで開いたときに前の選手のデータが残ってはいけない。
+キャッシュキーは必ず「今このアプリが使っているトークン」から作る。ログインでトークンが
+URLからlocalStorageに移ったので、URL_TOKENから作ると、コーチ用の"all"キャッシュが
+選手側の画面に出るといった取り違えが起きる。
+スタッフは全員分が見えるので、選手とはキーを分ける。 */
+function cacheKey() {
+if (AUTH) return "ntairlog_cache_v1_" + (AUTH.role === "staff" ? "staff" : "a_" + (AUTH.athleteId || AUTH.token || ""));
+return "ntairlog_cache_v1_" + (URL_TOKEN || "all");
+}
 function loadCache() {
 try {
-var s = localStorage.getItem(CACHE_KEY);
+var s = localStorage.getItem(cacheKey());
 if (!s) return null;
 var c = JSON.parse(s);
 return (c && c.athletes) ? c : null;
@@ -633,7 +768,7 @@ return (c && c.athletes) ? c : null;
 }
 function saveCache(data) {
 try {
-localStorage.setItem(CACHE_KEY, JSON.stringify({
+localStorage.setItem(cacheKey(), JSON.stringify({
 athletes: data.athletes || [], records: data.records || [],
 videos: data.videos || [], scoped: data.scoped === true, savedAt: Date.now()
 }));
@@ -641,6 +776,13 @@ videos: data.videos || [], scoped: data.scoped === true, savedAt: Date.now()
 }
 function refreshData() {
 return apiGet().then(function (data) {
+/* サーバが「このトークンは無効」「ログインが必要」と返した場合は、
+データが無いのではなく入口の問題。真っ白な画面で終わらせず案内画面を出す。 */
+if (data && data.status === "error" && data.code) {
+S.fatalCode = data.code;
+AUTH_UI.blockedCode = data.code;
+throw new Error(data.code);
+}
 applyData(data);
 saveCache(data);
 SERVER_LOAD_OK = true;
@@ -2896,8 +3038,10 @@ return (
 (S.loadError ? '<div class="draft-banner" style="border-color:' + COLORS.amber + ';color:' + COLORS.amber + ';margin-top:8px;">' + escHtml(S.loadError) + '</div>' : '') +
 (S.refreshError ? '<div class="draft-banner" style="border-color:' + COLORS.amber + ';color:' + COLORS.amber + ';margin-top:8px;">' + escHtml(S.refreshError) + '</div>' : '') +
 '<div class="header-row"><div><h1 class="app-title">NTエアlog</h1><span class="app-tag">' + tr("共有版") + '</span></div><div style="display:flex;align-items:center;gap:8px;">' + renderLangToggle() + '<button class="refresh-btn' + (S.refreshing ? ' spinning' : '') + '" onclick="manualRefresh()" title="' + escAttr(tr("最新データに更新")) + '" ' + (S.refreshing ? 'disabled' : '') + '>⟳</button><img class="app-logo" src="assets/logo.png" alt="JMT" /></div></div>' +
+renderAuthBarHtml() +
 '<div style="text-align:right;margin:6px 0 -4px;"><button style="background:none;border:none;color:' + COLORS.textFaint + ';font-size:11px;text-decoration:underline;cursor:pointer;padding:4px 0;" onclick="toggleFeedback()">' + tr("フィードバックを送る") + '</button></div>' +
 renderFeedbackCard() +
+renderSetupBannerHtml() +
 mogulDividerSvg()
 );
 }
@@ -2944,7 +3088,326 @@ return (
 "</div></div>"
 );
 }
+/* ---- ログイン・初回設定・パスワード再設定の画面 ----
+第2段階では、従来の個人リンク(?token=)もそのまま使えるままにしてある。
+設定していない選手も今まで通り記録できるよう、初回設定画面には「あとで設定する」を置く。
+
+スタッフ(18名)は招待リンク(?invite=)から入る。メールアドレスとパスワードは本人が
+この画面で決めるので、城さんが誰のパスワードも知らない状態を保てる。 */
+var AUTH_UI = {
+  screen: "", busy: false, error: "", info: "",
+  email: "", pw: "", pw2: "", setupInfo: null, inviteInfo: null, blockedCode: ""
+};
+
+function authScreenActive() { return !!AUTH_UI.screen; }
+function setAuthField(name, v) { AUTH_UI[name] = v; }
+function showAuthScreen(name) {
+AUTH_UI.screen = name;
+AUTH_UI.error = "";
+AUTH_UI.info = "";
+AUTH_UI.pw = "";
+AUTH_UI.pw2 = "";
+render();
+}
+function closeAuthScreen() {
+AUTH_UI.screen = "";
+AUTH_UI.error = "";
+AUTH_UI.pw = "";
+AUTH_UI.pw2 = "";
+render();
+}
+
+/* 送信中に押しっぱなしで二重に飛ばないよう、必ずbusyで塞ぐ。 */
+function authPost(payload, onOk) {
+if (AUTH_UI.busy) return;
+AUTH_UI.busy = true;
+AUTH_UI.error = "";
+render();
+payload.lang = LANG;   /* サーバ側がメールの言語を決めるのに使う */
+apiPost(payload).then(function (res) {
+AUTH_UI.busy = false;
+if (!res || res.status !== "ok") {
+AUTH_UI.error = (res && res.message) || tr("うまくいきませんでした。通信状況を確認してもう一度お試しください。");
+render();
+return;
+}
+onOk(res);
+}).catch(function () {
+AUTH_UI.busy = false;
+AUTH_UI.error = tr("通信に失敗しました。電波の良い場所でもう一度お試しください。");
+render();
+});
+}
+
+/* ログイン成功後は、前の利用者のキャッシュが画面に残らないよう必ず読み直す。 */
+function authAdoptSession(res) {
+clearAllCaches();
+saveAuth({
+token: res.token || "", role: res.role, athleteId: res.athleteId || "",
+displayName: res.displayName || "", staffRole: res.staffRole || "", email: res.email || ""
+});
+AUTH_UI.screen = "";
+AUTH_UI.pw = "";
+AUTH_UI.pw2 = "";
+ATHLETES = []; DATA = []; VIDEOS = [];
+IS_SCOPED = false; SERVER_LOAD_OK = false;
+S.athlete = ""; S.dashAthlete = ""; S.fatalCode = "";
+S.loading = true;
+renderLoading();
+refreshDataWithRetry(3, 1500).then(function () {
+S.loading = false; S.loadError = ""; render();
+}).catch(function () {
+S.loading = false;
+S.loadError = tr("データの読み込みに失敗しました。通信状況を確認して、画面を再読み込みしてください。");
+render();
+});
+}
+
+function doLogin() {
+if (!AUTH_UI.email || !AUTH_UI.pw) { AUTH_UI.error = tr("メールアドレスとパスワードを入力してください。"); render(); return; }
+authPost({ type: "authLogin", email: AUTH_UI.email, password: AUTH_UI.pw }, authAdoptSession);
+}
+
+function authValidateNewPassword() {
+if (AUTH_UI.pw.length < 10) { AUTH_UI.error = tr("パスワードは10文字以上にしてください。"); render(); return false; }
+if (AUTH_UI.pw !== AUTH_UI.pw2) { AUTH_UI.error = tr("パスワード（確認用）が一致しません。"); render(); return false; }
+return true;
+}
+
+function doSetup() {
+if (!AUTH_UI.email) { AUTH_UI.error = tr("メールアドレスを入力してください。"); render(); return; }
+if (!authValidateNewPassword()) return;
+authPost({ type: "authSetup", token: URL_TOKEN, email: AUTH_UI.email, password: AUTH_UI.pw }, authAdoptSession);
+}
+
+function doInviteSetup() {
+if (!AUTH_UI.email) { AUTH_UI.error = tr("メールアドレスを入力してください。"); render(); return; }
+if (!authValidateNewPassword()) return;
+authPost({ type: "authInviteSetup", inviteToken: INVITE_TOKEN, email: AUTH_UI.email, password: AUTH_UI.pw }, authAdoptSession);
+}
+
+function doRequestReset() {
+if (!AUTH_UI.email) { AUTH_UI.error = tr("メールアドレスを入力してください。"); render(); return; }
+authPost({ type: "authRequestReset", email: AUTH_UI.email }, function (res) {
+AUTH_UI.info = res.message || "";
+render();
+});
+}
+
+function doResetPassword() {
+if (!authValidateNewPassword()) return;
+authPost({ type: "authResetPassword", resetToken: RESET_TOKEN, password: AUTH_UI.pw }, function (res) {
+AUTH_UI.info = res.message || "";
+AUTH_UI.screen = "login";
+AUTH_UI.pw = ""; AUTH_UI.pw2 = "";
+render();
+});
+}
+
+function doLogout() {
+if (!window.confirm(tr("ログアウトします。この端末では次回からメールアドレスとパスワードの入力が必要になります。"))) return;
+clearAuth();
+ATHLETES = []; DATA = []; VIDEOS = [];
+IS_SCOPED = false; SERVER_LOAD_OK = false;
+S.athlete = ""; S.dashAthlete = ""; S.fatalCode = "";
+AUTH_UI.email = ""; AUTH_UI.pw = ""; AUTH_UI.pw2 = "";
+AUTH_UI.info = tr("ログアウトしました。");
+showAuthScreen("login");
+}
+
+function authFieldHtml(label, type, name, value, placeholder) {
+return (
+'<div><div class="sub-label">' + tr(label) + '</div>' +
+'<input class="text-input" type="' + type + '" value="' + escAttr(value || "") + '"' +
+(placeholder ? ' placeholder="' + escAttr(placeholder) + '"' : "") +
+' oninput="setAuthField(\'' + name + '\', this.value)"></div>'
+);
+}
+
+/* パスワードの使い回し防止は、この設計で本当に効いている数少ない対策のひとつ。
+繰り返しハッシュの回数を増やしても守れるものはほとんど増えないので、
+この注意書きは「一応書いてある」ではなく、目に入る位置に置く。 */
+function authNoticeHtml() {
+return (
+'<div class="draft-banner" style="margin-top:4px;border-color:' + COLORS.amber + ';">' +
+"<b>" + tr("他のサービスと同じパスワードは使わないでください。") + "</b><br>" +
+tr("このアプリはパスワードを暗号化して保管していますが、専用の仕組みほど強くはありません。ここだけで使うパスワードにしてください。") +
+"</div>"
+);
+}
+
+function renderAuthScreen() {
+var busy = AUTH_UI.busy;
+var body = "";
+
+if (AUTH_UI.screen === "invite") {
+var inv = AUTH_UI.inviteInfo;
+if (!inv) {
+body =
+'<div style="font-size:15px;font-weight:600;">' + tr("初回設定") + "</div>" +
+'<div class="sub-label">' + tr("確認中…") + "</div>";
+} else {
+body =
+'<div style="font-size:15px;font-weight:600;">' + tr("初回設定") + "</div>" +
+'<div class="draft-banner" style="border-color:' + COLORS.ice + ';margin-top:4px;">' +
+tr("あなたはスタッフとして登録されます。") + "<br>" +
+"<b>" + escHtml(inv.displayName || "") + "</b>" +
+(inv.staffRole ? "（" + escHtml(tr(inv.staffRole)) + "）" : "") +
+"</div>" +
+authNoticeHtml() +
+'<div class="sub-label">' + tr("メールアドレスとパスワードを決めてください。次回からはこの2つでログインします。") + "</div>" +
+authFieldHtml("メールアドレス", "email", "email", AUTH_UI.email, "you@example.com") +
+authFieldHtml("パスワード（10文字以上）", "password", "pw", AUTH_UI.pw) +
+authFieldHtml("パスワード（確認用）", "password", "pw2", AUTH_UI.pw2) +
+'<button class="save-btn" onclick="doInviteSetup()" ' + (busy ? "disabled" : "") + ">" + (busy ? tr("設定中…") : tr("設定する")) + "</button>";
+}
+
+} else if (AUTH_UI.screen === "setup") {
+var name = (AUTH_UI.setupInfo && AUTH_UI.setupInfo.athleteName) || "";
+body =
+'<div style="font-size:15px;font-weight:600;">' + tr("初回設定") + (name ? "（" + escHtml(name) + "）" : "") + "</div>" +
+authNoticeHtml() +
+'<div class="sub-label">' + tr("次からはリンクが無くても、メールアドレスとパスワードで入れるようになります。") + "</div>" +
+authFieldHtml("メールアドレス", "email", "email", AUTH_UI.email, "you@example.com") +
+authFieldHtml("パスワード（10文字以上）", "password", "pw", AUTH_UI.pw) +
+authFieldHtml("パスワード（確認用）", "password", "pw2", AUTH_UI.pw2) +
+'<button class="save-btn" onclick="doSetup()" ' + (busy ? "disabled" : "") + ">" + (busy ? tr("設定中…") : tr("設定する")) + "</button>" +
+'<button class="chip-btn" onclick="closeAuthScreen()" ' + (busy ? "disabled" : "") + ">" + tr("あとで設定する") + "</button>";
+
+} else if (AUTH_UI.screen === "reset") {
+body =
+'<div style="font-size:15px;font-weight:600;">' + tr("新しいパスワードの設定") + "</div>" +
+authNoticeHtml() +
+authFieldHtml("新しいパスワード（10文字以上）", "password", "pw", AUTH_UI.pw) +
+authFieldHtml("新しいパスワード（確認用）", "password", "pw2", AUTH_UI.pw2) +
+'<button class="save-btn" onclick="doResetPassword()" ' + (busy ? "disabled" : "") + ">" + (busy ? tr("設定中…") : tr("設定する")) + "</button>";
+
+} else if (AUTH_UI.screen === "forgot") {
+body =
+'<div style="font-size:15px;font-weight:600;">' + tr("パスワードの再設定") + "</div>" +
+'<div class="sub-label">' + tr("登録済みのメールアドレスに、再設定用のリンクをお送りします。リンクは30分間・1回だけ有効です。") + "</div>" +
+authFieldHtml("メールアドレス", "email", "email", AUTH_UI.email, "you@example.com") +
+'<button class="save-btn" onclick="doRequestReset()" ' + (busy ? "disabled" : "") + ">" + (busy ? tr("送信中…") : tr("再設定リンクを送る")) + "</button>" +
+'<button class="chip-btn" onclick="showAuthScreen(\'login\')" ' + (busy ? "disabled" : "") + ">" + tr("ログイン画面に戻る") + "</button>";
+
+} else if (AUTH_UI.screen === "blocked") {
+/* リンクが切れた・コピーミスした人に、次に何をすればいいかを必ず書く。
+真っ白な画面やJSONのエラーで終わらせない。 */
+body =
+'<div style="font-size:15px;font-weight:600;">' +
+(AUTH_UI.blockedCode === "login_required" ? tr("ログインが必要です") : tr("このリンクは有効ではありません")) + "</div>" +
+'<div class="sub-label">' +
+(AUTH_UI.blockedCode === "login_required"
+? tr("メールアドレスとパスワードでログインしてください。")
+: tr("リンクが途中で切れているか、古くなっている可能性があります。メールアドレスとパスワードを設定済みの方は、下からログインできます。")) +
+"</div>" +
+'<div class="draft-banner" style="margin-top:4px;">' + tr("設定がお済みでない方や、うまくいかない場合は城さんにご連絡ください。") + "</div>" +
+'<button class="save-btn" onclick="showAuthScreen(\'login\')">' + tr("ログイン") + "</button>";
+
+} else {
+body =
+'<div style="font-size:15px;font-weight:600;">' + tr("ログイン") + "</div>" +
+authFieldHtml("メールアドレス", "email", "email", AUTH_UI.email, "you@example.com") +
+authFieldHtml("パスワード", "password", "pw", AUTH_UI.pw) +
+'<button class="save-btn" onclick="doLogin()" ' + (busy ? "disabled" : "") + ">" + (busy ? tr("確認中…") : tr("ログイン")) + "</button>" +
+'<button class="chip-btn" onclick="showAuthScreen(\'forgot\')" ' + (busy ? "disabled" : "") + ">" + tr("パスワードをお忘れの方") + "</button>" +
+(AUTH || INVITE_TOKEN || RESET_TOKEN || S.fatalCode ? "" :
+'<button class="chip-btn" onclick="closeAuthScreen()" ' + (busy ? "disabled" : "") + ">" + tr("閉じる") + "</button>");
+}
+
+document.getElementById("root").innerHTML =
+'<div class="app-shell"><div class="container">' +
+'<div class="header-row"><div><h1 class="app-title">NTエアlog</h1></div>' +
+'<div style="display:flex;align-items:center;gap:8px;">' + renderLangToggle() + '<img class="app-logo" src="assets/logo.png" alt="JMT" /></div></div>' +
+mogulDividerSvg() +
+'<div class="card" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">' +
+(AUTH_UI.info ? '<div class="draft-banner" style="border-color:' + COLORS.ice + ';">' + escHtml(AUTH_UI.info) + "</div>" : "") +
+(AUTH_UI.error ? '<div class="draft-banner" style="border-color:' + COLORS.amber + ';color:' + COLORS.amber + ';">' + escHtml(AUTH_UI.error) + "</div>" : "") +
+body +
+"</div></div></div>";
+}
+
+/* ヘッダーに出す、今誰として使っているかの表示とログアウト。
+共用のパソコンで開いてしまったとき、端末を人に譲るときのために必要。 */
+function renderAuthBarHtml() {
+if (AUTH) {
+var who = AUTH.displayName || AUTH.email || "";
+var suffix = AUTH.staffRole ? "（" + tr(AUTH.staffRole) + "）" : (AUTH.role === "staff" ? "（" + tr("スタッフ") + "）" : "");
+return (
+'<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:6px 0 -4px;font-size:11px;color:' + COLORS.textFaint + ';">' +
+"<span>" + escHtml(who) + escHtml(suffix) + "</span>" +
+'<button style="background:none;border:none;color:' + COLORS.textFaint + ';font-size:11px;text-decoration:underline;cursor:pointer;padding:4px 0;" onclick="doLogout()">' + tr("ログアウト") + "</button>" +
+"</div>"
+);
+}
+/* 個人リンク(?token=)で開いている選手には「ログイン」を出さない。
+本人はもう特定できているので、出すと「ログインしないと使えない」と誤解させる。
+設定をすすめる案内は renderSetupBannerHtml() のバナーが担当する。 */
+if (URL_TOKEN) return "";
+return (
+'<div style="text-align:right;margin:6px 0 -4px;">' +
+'<button style="background:none;border:none;color:' + COLORS.textFaint + ';font-size:11px;text-decoration:underline;cursor:pointer;padding:4px 0;" onclick="showAuthScreen(\'login\')">' + tr("ログイン") + "</button>" +
+"</div>"
+);
+}
+
+/* 招待リンクを開いたとき、誰への招待かをサーバに聞いて画面に出す。 */
+function loadInviteInfo() {
+apiPost({ type: "authInviteInfo", inviteToken: INVITE_TOKEN }).then(function (res) {
+if (!res || res.status !== "ok") {
+AUTH_UI.blockedCode = "invite_invalid";
+AUTH_UI.error = (res && res.message) || "";
+showAuthScreen("blocked");
+return;
+}
+AUTH_UI.inviteInfo = res;
+if (res.lang === "en" || res.lang === "ja") setLangSilently(res.lang);
+render();
+}).catch(function () {
+AUTH_UI.error = tr("通信に失敗しました。電波の良い場所でもう一度お試しください。");
+render();
+});
+}
+/* 招待された人の登録言語に画面を合わせる。保存はするが再描画は呼び出し側に任せる。 */
+function setLangSilently(lang) {
+LANG = lang;
+try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch (e) {}
+document.documentElement.lang = lang;
+}
+
+/* 個人リンクで開いた選手がまだアカウントを作っていなければ、初回設定を案内する。
+ログイン済みの端末では呼ばないので、設定が済んだ人に毎回出ることはない。 */
+function checkFirstTimeSetup() {
+if (AUTH || !URL_TOKEN || RESET_TOKEN || INVITE_TOKEN) return;
+apiPost({ type: "authStatus", token: URL_TOKEN }).then(function (res) {
+if (!res || res.status !== "ok" || !res.known || res.hasAccount) return;
+AUTH_UI.setupInfo = res;
+/* 全画面の設定画面で覆わない。第2段階は「今までどおり記録できる」のが前提なので、
+アプリはそのまま出したうえで、消せる案内バナーだけを出す。
+全画面で出すと、個人リンクを開いた選手に「ログインしないと使えない」と読まれてしまう。 */
+if (!authScreenActive()) render();
+}).catch(function () { /* 判定できなくても従来どおり使えるので黙って諦める */ });
+}
+
+/* 初回設定のおすすめバナー。閉じてもその場限りで、次に開いたらまた出る。
+「まだの人に気づいてもらう」ことと「今すぐやらなくても困らない」ことを両立させる。 */
+function dismissSetupBanner() { S.setupBannerClosed = true; render(); }
+function openSetupScreen() { showAuthScreen("setup"); }
+function renderSetupBannerHtml() {
+if (AUTH || !AUTH_UI.setupInfo || S.setupBannerClosed || authScreenActive()) return "";
+return (
+'<div class="card" style="margin-top:8px;border-color:' + COLORS.ice + ';display:flex;flex-direction:column;gap:8px;">' +
+'<div style="font-size:13px;">' + tr("メールアドレスとパスワードを設定しておくと、次からリンクが無くても入れます。今すぐでなくても、これまでどおり記録できます。") + "</div>" +
+'<div class="inline-row">' +
+'<button class="save-btn" style="flex:1;" onclick="openSetupScreen()">' + tr("設定する") + "</button>" +
+'<button class="chip-btn" style="flex:0 0 auto;padding:12px 14px;" onclick="dismissSetupBanner()">' + tr("あとで") + "</button>" +
+"</div></div>"
+);
+}
+
 function render() {
+if (S.fatalCode && !authScreenActive()) { AUTH_UI.screen = "blocked"; }
+if (authScreenActive()) { renderAuthScreen(); return; }
 pendingCharts = [];
 var root = document.getElementById("root");
 root.innerHTML =
@@ -2979,6 +3442,10 @@ if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return false;
 return true;
 }
 function loadAll() {
+/* 再設定メールや招待リンクから開いた場合は、データを読みに行かずその画面だけを出す。 */
+if (RESET_TOKEN) { showAuthScreen("reset"); return; }
+if (INVITE_TOKEN) { showAuthScreen("invite"); loadInviteInfo(); return; }
+checkFirstTimeSetup();
 var cached = loadCache();
 var usedCache = false;
 if (cached) {
