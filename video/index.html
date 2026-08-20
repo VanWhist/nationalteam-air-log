@@ -297,9 +297,11 @@ var DEMO = /*__DEMO__*/null/*__END_DEMO__*/;
    API_URL は必ず本体の index.html と同じ exec URL にすること（別デプロイのURLを入れない）。 */
 var CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbwhxPSdRvM67Bf7RO6gDUoZxxvGipDNGs7Up5BXUvbqulr90wjGzhZXtV2VQERyP3rAYw/exec",
+  APP_NAME: "NTエアlog",
   HOME_LABEL_JA: "← NTエアlog",
   HOME_LABEL_EN: "← NT Air Log"
 };
+try { document.title = "動画ビューア | " + CONFIG.APP_NAME; } catch (e) {}
 
 /* ===== 本体(../index.html)と同じ接続先・認証 ===== */
 var API_URL = CONFIG.API_URL;
@@ -390,6 +392,25 @@ function cacheKey() {
 }
 function loadCache() { try { var s = localStorage.getItem(cacheKey()); if (!s) return null; var c = JSON.parse(s); return (c && c.athletes) ? c : null; } catch (e) { return null; } }
 
+/* Dropboxの共有URLは既定で dl=0 が付く。これは動画そのものではなく、プレビュー用の
+   HTMLページを返すURLで、<video src> に渡しても再生できない（2026-08-19に実測で確認済み。
+   dl=0 は text/html、raw=1 は video/mp4 が返る）。
+
+   NTエアlogはApps Script側(dropboxPlayableUrl_)で記録時に raw=1 に直しているので、
+   シートには既に再生できるURLだけが入っており、ここは素通りする。
+   MICエアログにはその修正が入っておらず、シートには dl=0 のまま記録されている。
+   MICのApps Scriptは変更しない方針なので、読み取り側で吸収する。
+   将来MIC側が直っても、raw=1 はそのまま返すので二重変換にはならない。 */
+function playableUrl(url) {
+  if (!url) return url;
+  var u = String(url);
+  if (u.indexOf("dropbox.com") < 0) return u;
+  if (u.indexOf("raw=1") >= 0) return u;
+  if (u.indexOf("dl=0") >= 0) return u.replace("dl=0", "raw=1");
+  if (u.indexOf("dl=1") >= 0) return u.replace("dl=1", "raw=1");
+  return u + (u.indexOf("?") >= 0 ? "&" : "?") + "raw=1";
+}
+
 function joinData(data) {
   var entryById = {};
   (data.records || []).forEach(function (e) { entryById[e.id] = e; });
@@ -406,7 +427,7 @@ function joinData(data) {
     var aid = v.athleteId || (entry ? entry.athlete : "");
     return {
       videoId: v.videoId,
-      url: v.sharedUrl,
+      url: playableUrl(v.sharedUrl),
       uploadedAt: v.uploadedAt || "",
       entryId: v.entryId || "",
       rowId: v.rowId || "",
