@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>動画ビューア | NTエアlog</title>
+<style>
+/* ===== NTエアlog 動画ビューア（第1弾） =====
+   本体(../index.html)とデザインを揃えたダークテーマ。
+   認証・データ取得は本体と同じ仕組み(localStorageのAUTH / ?token= / doGet)を使う。 */
+html, body { margin: 0; padding: 0; background: #0B1420; min-height: 100%; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+input, select, button { font-family: inherit; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; color: #EAF1F8; }
+.shell { max-width: 480px; margin: 0 auto; padding: 16px 16px calc(90px + env(safe-area-inset-bottom, 0px)); }
+
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.back-link { color: #8CA0B8; font-size: 12px; text-decoration: none; padding: 6px 0; }
+.app-title { font-size: 18px; font-weight: 700; margin: 4px 0 2px; }
+.app-sub { font-size: 11px; color: #5C7086; margin-bottom: 14px; }
+
+.lang-toggle { display: inline-flex; border-radius: 999px; overflow: hidden; border: 1px solid #26374E; background: #131F30; flex-shrink: 0; }
+.lang-seg { padding: 4px 9px; font-size: 10px; font-weight: 700; letter-spacing: .04em; border: none; background: transparent; color: #8CA0B8; cursor: pointer; line-height: 1.4; }
+.lang-seg.active { background: #4CC3F0; color: #062230; }
+
+.banner { border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 11px; line-height: 1.6; }
+.banner.info { background: #0F2233; border: 1px solid #2A5A75; color: #9AD6F0; }
+.banner.warn { background: #2A1F0E; border: 1px solid #6B4A1E; color: #FFB870; }
+.banner.error { background: #3A1414; border: 1px solid #8B2C2C; color: #FF9A9A; }
+.banner a { color: inherit; }
+
+/* ---- 絞り込み ---- */
+.filter-card { border-radius: 12px; padding: 12px; background: #131F30; border: 1px solid #26374E; margin-bottom: 14px; }
+.filter-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+.filter-title { font-size: 12px; font-weight: 700; color: #8CA0B8; }
+.filter-count { font-size: 11px; color: #4CC3F0; }
+.filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.filter-grid .full { grid-column: 1 / -1; }
+.field-label { font-size: 10px; margin-bottom: 4px; display: block; color: #5C7086; }
+.select-input { width: 100%; appearance: none; -webkit-appearance: none; border-radius: 8px; padding: 8px 26px 8px 10px; font-size: 12px; background: #1B2C42; border: 1px solid #26374E; color: #EAF1F8; outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235C7086' fill='none' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+.date-input { width: 100%; border-radius: 8px; padding: 7px 10px; font-size: 12px; background: #1B2C42; border: 1px solid #26374E; color: #EAF1F8; outline: none; color-scheme: dark; }
+.sort-row { display: flex; gap: 8px; margin-top: 10px; }
+.sort-btn { flex: 1; padding: 8px 0; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid #26374E; background: #1B2C42; color: #8CA0B8; cursor: pointer; }
+.sort-btn.active { background: #4CC3F0; color: #062230; border-color: #4CC3F0; }
+.clear-btn { padding: 8px 12px; border-radius: 8px; font-size: 12px; border: 1px solid #26374E; background: #131F30; color: #8CA0B8; cursor: pointer; }
+
+/* ---- 動画カード ---- */
+.video-list { display: flex; flex-direction: column; gap: 10px; }
+.video-card { border-radius: 12px; padding: 12px; background: #131F30; border: 1px solid #26374E; display: flex; flex-direction: column; gap: 8px; }
+.video-card.selA { border-color: #4CC3F0; box-shadow: 0 0 0 1px #4CC3F0 inset; }
+.video-card.selB { border-color: #FF9645; box-shadow: 0 0 0 1px #FF9645 inset; }
+.vc-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vc-date { font-size: 12px; color: #8CA0B8; font-family: ui-monospace, monospace; }
+.vc-athlete { font-size: 12px; font-weight: 700; color: #EAF1F8; }
+.badge { font-size: 10px; font-weight: 700; border-radius: 6px; padding: 2px 6px; }
+.badge.success { background: #12351F; color: #6FE09A; border: 1px solid #1E5A35; }
+.badge.fail { background: #3A1414; color: #FF9A9A; border: 1px solid #8B2C2C; }
+.badge.yure { background: #2A1F0E; color: #FFB870; border: 1px solid #6B4A1E; }
+.badge.sel { margin-left: auto; }
+.badge.selA-badge { background: #4CC3F0; color: #062230; border: none; }
+.badge.selB-badge { background: #FF9645; color: #23140A; border: none; }
+.vc-main { font-size: 14px; font-weight: 700; line-height: 1.4; }
+.vc-sub { font-size: 11px; color: #5C7086; line-height: 1.5; }
+.vc-note { font-size: 11px; color: #8CA0B8; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vc-actions { display: flex; gap: 8px; }
+.vc-btn { flex: 1; padding: 9px 0; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid #26374E; background: #1B2C42; color: #EAF1F8; cursor: pointer; }
+.vc-btn.play { color: #4CC3F0; }
+.vc-btn.compare.on { background: #4CC3F0; color: #062230; border-color: #4CC3F0; }
+.empty-note { text-align: center; color: #5C7086; font-size: 13px; padding: 40px 0; line-height: 1.8; }
+
+/* ---- 比較バー(下部固定) ---- */
+.cmp-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, rgba(11,20,32,0) 0%, #0B1420 24%); }
+.cmp-bar-inner { max-width: 480px; margin: 0 auto; display: flex; gap: 8px; align-items: center; }
+.cmp-slot { flex: 1; min-width: 0; font-size: 10px; border-radius: 8px; padding: 6px 8px; background: #131F30; border: 1px solid #26374E; color: #8CA0B8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-slot.filled-a { border-color: #4CC3F0; color: #EAF1F8; }
+.cmp-slot.filled-b { border-color: #FF9645; color: #EAF1F8; }
+.cmp-go { flex: 0 0 auto; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; border: none; background: #4CC3F0; color: #062230; cursor: pointer; }
+.cmp-go:disabled { background: #1B2C42; color: #5C7086; }
+.cmp-clear { flex: 0 0 auto; padding: 10px 10px; border-radius: 8px; font-size: 12px; border: 1px solid #26374E; background: #131F30; color: #8CA0B8; cursor: pointer; }
+
+/* ---- 比較ビュー(全画面) ---- */
+#compareView { position: fixed; inset: 0; z-index: 100; background: #05090F; display: flex; flex-direction: column; }
+#compareView[hidden] { display: none; }
+.cv-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); flex: 0 0 auto; }
+.cv-close { border: 1px solid #26374E; background: #131F30; color: #EAF1F8; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+.cv-mode { display: inline-flex; border-radius: 999px; overflow: hidden; border: 1px solid #26374E; background: #131F30; margin-left: auto; }
+.cv-mode button { padding: 6px 12px; font-size: 11px; font-weight: 700; border: none; background: transparent; color: #8CA0B8; cursor: pointer; }
+.cv-mode button.active { background: #4CC3F0; color: #062230; }
+#cmpPanes { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; gap: 2px; }
+@media (orientation: landscape) { #cmpPanes { flex-direction: row; } }
+.pane { flex: 1 1 0; min-height: 0; min-width: 0; position: relative; background: #000; overflow: hidden; touch-action: none; }
+.pane video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: center center; }
+.pane-tag { position: absolute; top: 6px; left: 6px; z-index: 5; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 2px 7px; pointer-events: none; }
+.pane-tag.a { background: #4CC3F0; color: #062230; }
+.pane-tag.b { background: #FF9645; color: #23140A; }
+.pane-label { position: absolute; top: 6px; left: 34px; right: 70px; z-index: 5; font-size: 10px; color: #C8D6E4; text-shadow: 0 1px 2px #000; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mirror-badge { position: absolute; top: 26px; right: 6px; z-index: 5; font-size: 10px; font-weight: 700; background: #FF9645; color: #23140A; border-radius: 6px; padding: 2px 6px; pointer-events: none; }
+.pane-btns { position: absolute; top: 4px; right: 4px; z-index: 6; display: flex; gap: 4px; }
+.pane-btn { border: 1px solid rgba(140,160,184,.4); background: rgba(19,31,48,.75); color: #EAF1F8; border-radius: 6px; padding: 4px 8px; font-size: 10px; cursor: pointer; }
+.pane-btn.on { background: #FF9645; color: #23140A; border-color: #FF9645; }
+.takeoff-flag { font-size: 10px; color: #9AD6F0; text-shadow: 0 1px 2px #000; pointer-events: none; flex-shrink: 0; margin-left: auto; align-self: center; }
+
+/* 個別モードの各ペーン操作列 */
+.pane-ctrl { position: absolute; bottom: 0; left: 0; right: 0; z-index: 6; padding: 22px 8px 6px; background: linear-gradient(180deg, rgba(5,9,15,0) 0%, rgba(5,9,15,.85) 55%); display: flex; flex-direction: column; gap: 4px; }
+.pane-ctrl .row { display: flex; align-items: center; gap: 6px; }
+.pane-ctrl input[type=range] { flex: 1; min-width: 0; }
+.mini-btn { border: 1px solid #26374E; background: rgba(19,31,48,.9); color: #EAF1F8; border-radius: 7px; padding: 6px 9px; font-size: 11px; cursor: pointer; flex-shrink: 0; }
+.mini-btn.accent { color: #4CC3F0; border-color: #2A5A75; }
+.mini-btn.primary { background: #4CC3F0; color: #062230; border-color: #4CC3F0; font-weight: 700; }
+
+/* 下部の同期コントロール */
+.cv-ctrl { flex: 0 0 auto; padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: #0B1420; border-top: 1px solid #16233A; display: flex; flex-direction: column; gap: 8px; }
+.cv-ctrl[hidden] { display: none; }
+.timeline-row { display: flex; align-items: center; gap: 8px; }
+.time-label { font-size: 11px; color: #9AD6F0; font-family: ui-monospace, monospace; flex: 0 0 auto; min-width: 76px; text-align: center; }
+input[type=range].sync-range { flex: 1; min-width: 0; accent-color: #4CC3F0; }
+input[type=range] { accent-color: #4CC3F0; }
+.transport-row { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.t-btn { border: 1px solid #26374E; background: #131F30; color: #EAF1F8; border-radius: 8px; padding: 8px 10px; font-size: 12px; cursor: pointer; }
+.t-btn.play-main { background: #4CC3F0; color: #062230; border-color: #4CC3F0; font-weight: 800; padding: 8px 18px; font-size: 14px; }
+.t-btn.on { background: #FF9645; color: #23140A; border-color: #FF9645; font-weight: 700; }
+.rate-group { display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid #26374E; }
+.rate-group button { border: none; background: #131F30; color: #8CA0B8; padding: 8px 9px; font-size: 11px; cursor: pointer; }
+.rate-group button.active { background: #4CC3F0; color: #062230; font-weight: 700; }
+.hint-line { font-size: 10px; color: #5C7086; text-align: center; line-height: 1.5; }
+.hint-line.warn { color: #FFB870; }
+.ov-label { font-size: 10px; color: #8CA0B8; }
+
+/* ---- 重ねモード: 2つのペーンを同じ場所に重ね、Bを半透明で上に置く ---- */
+#cmpPanes.overlay { position: relative; display: block; }
+#cmpPanes.overlay .pane { position: absolute; inset: 0; }
+#cmpPanes.overlay #paneA { background: #000; }
+#cmpPanes.overlay #paneB { background: transparent; }
+#cmpPanes.overlay #paneB .pane-tag { top: 24px; }
+#cmpPanes.overlay #paneB .pane-label { top: 24px; }
+#cmpPanes.overlay #paneB .mirror-badge { top: 44px; }
+#cmpPanes.overlay .pane-btns { display: none; }
+
+/* ---- 単体再生モーダル ---- */
+.modal-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(4,8,14,.92); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px; padding: 16px; }
+.modal-overlay.open { display: flex; }
+.modal-overlay video { max-width: 100%; max-height: 60vh; border-radius: 10px; background: #000; }
+.player-ctrl { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 8px; }
+.player-ctrl .timeline-row { gap: 8px; }
+.player-ctrl .time-label { min-width: 84px; }
+.modal-caption { font-size: 12px; color: #8CA0B8; text-align: center; line-height: 1.5; }
+.modal-close { border: 1px solid #26374E; background: #131F30; color: #EAF1F8; border-radius: 8px; padding: 9px 22px; font-size: 13px; cursor: pointer; }
+
+.loading-note { text-align: center; color: #5C7086; font-size: 13px; padding: 40px 0; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #26374E; border-top-color: #4CC3F0; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="shell" id="listShell">
+  <div class="top-row">
+    <a class="back-link" id="backLink" href="../">← NTエアlog</a>
+    <span id="langToggle"></span>
+  </div>
+  <div class="app-title" id="ttl">動画ビューア</div>
+  <div class="app-sub" id="subttl"></div>
+  <div id="notice"></div>
+  <div id="filterArea"></div>
+  <div id="listArea"><div class="loading-note"><span class="spin"></span><span id="loadingTxt">読み込み中…</span></div></div>
+</div>
+
+<div class="cmp-bar" id="cmpBar" hidden>
+  <div class="cmp-bar-inner">
+    <div class="cmp-slot" id="slotA">A: −</div>
+    <div class="cmp-slot" id="slotB">B: −</div>
+    <button class="cmp-clear" id="btnClearSel">✕</button>
+    <button class="cmp-go" id="btnGoCompare" disabled>比較</button>
+  </div>
+</div>
+
+<!-- 比較ビュー: video要素を作り直すと再生状態が失われるため、この画面だけは固定DOM -->
+<div id="compareView" hidden>
+  <div class="cv-head">
+    <button class="cv-close" id="btnCvClose">← 一覧</button>
+    <div class="cv-mode" id="modeToggle">
+      <button id="modeIndiv">個別</button>
+      <button id="modeSync">同期</button>
+      <button id="modeOverlay">重ね</button>
+    </div>
+  </div>
+  <div id="cmpPanes">
+    <div class="pane" id="paneA">
+      <video id="vidA" playsinline muted preload="auto"></video>
+      <div class="pane-tag a">A</div>
+      <div class="pane-label" id="labelA"></div>
+      <div class="pane-btns">
+        <button class="pane-btn" id="btnZoomResetA" hidden>⤾</button>
+        <button class="pane-btn" id="btnMirrorA">反転</button>
+      </div>
+      <div class="mirror-badge" id="mirrorBadgeA" hidden>反転中</div>
+      <div class="pane-ctrl" id="ctrlA">
+        <div class="row">
+          <input type="range" id="seekA" min="0" max="1000" value="0" step="1">
+        </div>
+        <div class="row">
+          <button class="mini-btn" id="stepBackA">◀ コマ</button>
+          <button class="mini-btn" id="stepFwdA">コマ ▶</button>
+          <button class="mini-btn accent" id="playA">▶</button>
+          <button class="mini-btn primary" id="setTakeoffA">離台をここに設定</button>
+          <span class="takeoff-flag" id="takeoffFlagA"></span>
+        </div>
+      </div>
+    </div>
+    <div class="pane" id="paneB">
+      <video id="vidB" playsinline muted preload="auto"></video>
+      <div class="pane-tag b">B</div>
+      <div class="pane-label" id="labelB"></div>
+      <div class="pane-btns">
+        <button class="pane-btn" id="btnZoomResetB" hidden>⤾</button>
+        <button class="pane-btn" id="btnMirrorB">反転</button>
+      </div>
+      <div class="mirror-badge" id="mirrorBadgeB" hidden>反転中</div>
+      <div class="pane-ctrl" id="ctrlB">
+        <div class="row">
+          <input type="range" id="seekB" min="0" max="1000" value="0" step="1">
+        </div>
+        <div class="row">
+          <button class="mini-btn" id="stepBackB">◀ コマ</button>
+          <button class="mini-btn" id="stepFwdB">コマ ▶</button>
+          <button class="mini-btn accent" id="playB">▶</button>
+          <button class="mini-btn primary" id="setTakeoffB">離台をここに設定</button>
+          <span class="takeoff-flag" id="takeoffFlagB"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cv-ctrl" id="syncCtrl" hidden>
+    <div class="timeline-row">
+      <div class="time-label" id="timeLabel">離台 +0.00s</div>
+      <input type="range" class="sync-range" id="seekSync" min="0" max="1000" value="0" step="1">
+    </div>
+    <div class="transport-row">
+      <button class="t-btn" id="stepBackSync">◀ コマ</button>
+      <button class="t-btn play-main" id="playSync">▶</button>
+      <button class="t-btn" id="stepFwdSync">コマ ▶</button>
+      <span class="rate-group" id="rateGroup">
+        <button data-rate="0.25">0.25×</button>
+        <button data-rate="0.5">0.5×</button>
+        <button data-rate="1" class="active">1×</button>
+      </span>
+      <button class="t-btn" id="btnLoopA">A点</button>
+      <button class="t-btn" id="btnLoopB">B点</button>
+      <button class="t-btn" id="btnLoopClear" hidden>解除</button>
+    </div>
+    <div class="transport-row" id="overlayRow" hidden>
+      <span class="ov-label" id="ovOpacityLabel">Bの濃さ</span>
+      <input type="range" id="opacityRange" min="10" max="90" value="50" style="width:110px">
+      <span class="ov-label" id="ovTargetLabel">操作対象</span>
+      <span class="rate-group" id="ovTargetGroup"><button data-t="a">A</button><button data-t="b" class="active">B</button></span>
+      <button class="t-btn" id="btnMirrorOv">反転</button>
+    </div>
+    <div class="hint-line warn" id="overlayHint" hidden></div>
+    <div class="hint-line" id="syncHint"></div>
+  </div>
+  <div class="cv-ctrl" id="indivHint">
+    <div class="hint-line" id="indivHintTxt">それぞれの動画で「離台（台を離れた瞬間）」のコマを探して設定してください。両方設定すると同期比較ができます。</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="playerModal">
+  <video id="playerVideo" playsinline muted preload="auto"></video>
+  <div class="player-ctrl">
+    <div class="timeline-row">
+      <div class="time-label" id="playerTime">0.00 / 0.00s</div>
+      <input type="range" class="sync-range" id="playerSeek" min="0" max="1000" value="0" step="1">
+    </div>
+    <div class="transport-row">
+      <button class="t-btn" id="playerStepBack">◀ コマ</button>
+      <button class="t-btn play-main" id="playerPlay">▶</button>
+      <button class="t-btn" id="playerStepFwd">コマ ▶</button>
+      <span class="rate-group" id="playerRateGroup">
+        <button data-rate="0.25">0.25×</button>
+        <button data-rate="0.5">0.5×</button>
+        <button data-rate="1" class="active">1×</button>
+      </span>
+    </div>
+  </div>
+  <div class="modal-caption" id="playerCaption"></div>
+  <button class="modal-close" id="playerClose">閉じる</button>
+</div>
+
+<script>
+"use strict";
+/* ===== デモデータ（プレビュー用）。本番ファイルでは null のまま ===== */
+var DEMO = /*__DEMO__*/null/*__END_DEMO__*/;
+
+/* ===== 設置先ごとの設定 =====
+   このファイルはNTエアlogとMICエアログの両方で使う。違うのはここだけにしてある。
+   別のアプリに載せるときは、この3行を書き換えてリポジトリの video/ に置く。
+   API_URL は必ず本体の index.html と同じ exec URL にすること（別デプロイのURLを入れない）。 */
+var CONFIG = {
+  API_URL: "https://script.google.com/macros/s/AKfycbwhxPSdRvM67Bf7RO6gDUoZxxvGipDNGs7Up5BXUvbqulr90wjGzhZXtV2VQERyP3rAYw/exec",
+  HOME_LABEL_JA: "← NTエアlog",
+  HOME_LABEL_EN: "← NT Air Log"
+};
+
+/* ===== 本体(../index.html)と同じ接続先・認証 ===== */
+var API_URL = CONFIG.API_URL;
+var URL_TOKEN = (function () { try { var m = location.search.match(/[?&]token=([^&]+)/); return m ? decodeURIComponent(m[1]) : ""; } catch (e) { return ""; } })();
+var AUTH = (function () { try { var s = localStorage.getItem("ntairlog_auth_v1"); if (!s) return null; var a = JSON.parse(s); return (a && a.role) ? a : null; } catch (e) { return null; } })();
+function effectiveToken() { if (AUTH) return AUTH.token || ""; return URL_TOKEN; }
+function isStaffSession() { return !!(AUTH && AUTH.role === "staff"); }
+
+/* ===== 言語(本体と同じキーを共有) ===== */
+var LANG = (function () { try { return localStorage.getItem("ntairlog_lang") === "en" ? "en" : "ja"; } catch (e) { return "ja"; } })();
+var TR_EN = {
+  "動画ビューア": "Video Viewer",
+  "読み込み中…": "Loading…",
+  "← NTエアlog": "← NT Air Log",
+  "自分の動画を見返して、2本を並べて比較できます": "Review your videos and compare two side by side",
+  "全選手の動画を見て、2本を並べて比較できます": "Browse all athletes' videos and compare two side by side",
+  "絞り込み": "Filters",
+  "本を表示中": " videos shown",
+  "選手": "Athlete", "技": "Trick", "グラブ": "Grab", "ニア/レギュラー": "Near/Regular",
+  "結果": "Result", "進入スピード": "Approach speed", "施設": "Facility", "台": "Kicker",
+  "開始日": "From", "終了日": "To",
+  "すべて": "All", "新しい順": "Newest first", "古い順": "Oldest first", "リセット": "Reset",
+  "成功": "Success", "失敗": "Fail", "ヨレ": "Wobble",
+  "ニア": "Near", "レギュラー": "Regular",
+  "ゆっくり": "Slow", "普通": "Normal", "速い": "Fast",
+  "再生": "Play", "比較に追加": "Add to compare", "選択中": "Selected", "比較": "Compare",
+  "動画がまだありません": "No videos yet",
+  "アップロードした動画がここに表示されます": "Videos you upload will appear here",
+  "条件に合う動画がありません": "No videos match the filters",
+  "読み込みに失敗しました": "Failed to load", "再試行": "Retry",
+  "このリンクは有効ではありません。NTエアlogを開き直してください。": "This link is not valid. Please reopen NT Air Log.",
+  "ログインが必要です。NTエアlogでログインしてから開いてください。": "Login required. Please log in on NT Air Log first.",
+  "← 一覧": "← List", "個別": "Individual", "同期": "Sync",
+  "離台をここに設定": "Set takeoff here", "反転": "Mirror", "反転中": "MIRRORED",
+  "離台": "Takeoff", "未設定": "not set",
+  "それぞれの動画で「離台（台を離れた瞬間）」のコマを探して設定してください。両方設定すると同期比較ができます。": "Find the takeoff frame (the moment leaving the kicker) in each video and set it. Once both are set, synced comparison is available.",
+  "離台を基準に2本が揃っています": "Both videos are aligned at takeoff",
+  "コマ": "frame", "A点": "Loop A", "B点": "Loop B", "解除": "Clear",
+  "区間ループ中": "Looping", "閉じる": "Close",
+  "片方の読み込み待ちで一時停止中…": "Paused: waiting for one video to buffer…",
+  "離台が未設定の動画があります（動画の先頭を離台として扱っています）": "Some videos have no takeoff set (using the start of the video instead)",
+  "重ね": "Overlay",
+  "Bの濃さ": "B opacity",
+  "操作対象": "Adjust",
+  "⚠ 撮影角度が違う2本を重ねると、実際には無い差が見えることがあります。同じ向き・近い角度の動画で使ってください。": "⚠ Overlaying videos shot from different angles can show differences that are not real. Use videos filmed from a similar direction and angle."
+};
+function tr(s) { if (LANG === "en" && TR_EN[s]) return TR_EN[s]; return s; }
+function setLang(l) { LANG = l; try { localStorage.setItem("ntairlog_lang", l); } catch (e) {} applyStaticText(); renderAll(); }
+
+/* ===== 技・グラブの表示名(本体のマスタから転記。IDが増えたら本体に合わせて追記する) ===== */
+var TRICK_LABELS = {
+  straight_jump: "ストレートジャンプ",
+  rot_3: "360", rot_7: "720", rot_10: "1080",
+  oax_3: "オフアクシス360", oax_7: "オフアクシス720", oax_10: "オフアクシス1080", oax_14: "オフアクシス1440",
+  inv_bc: "バックフリップ", inv_bt: "バックタック", inv_bp: "バックパイク", inv_bl: "バックレイアウト",
+  inv_bf: "バックフル", inv_bdf: "バックダブルフル", inv_btf: "バックトリプルフル",
+  inv_fc: "フロントフリップ", inv_ft: "フロントタック", inv_fp: "フロントパイク", inv_ff: "フロントフル",
+  loop_l: "ループ",
+  up_twister: "ツイスター", up_spread: "スプレッド", up_daffy: "ダフィー", up_ironcross: "アイアンクロス",
+  up_backscratcher: "バックスクラッチャー", up_mulekick: "ミュールキック", up_kosak: "コサック", up_zudnick: "ズドニック",
+  airtime: "10本ジャンプ",
+  inv_bpt: "バックタック/パイク", inv_fpt: "フロントタック/パイク"
+};
+var GRAB_LABELS = {
+  safety: "Safety", liukang: "Liu Kang", rearsafety: "Rear Safety", rearzone: "Rear Zone Grabs",
+  mute: "Mute", highmute: "High Mute", critical: "Critical", tail: "Tail", truckdriver: "Truck Driver",
+  japan: "Japan", highsafety: "High Safety", nose: "Nose", venom: "Venom", other: "その他/不明瞭"
+};
+function trickName(id) { return TRICK_LABELS[id] || id || ""; }
+function grabName(id) { return GRAB_LABELS[id] || id || ""; }
+function resultName(r) { return r === "success" ? tr("成功") : r === "fail" ? tr("失敗") : r === "yure" ? tr("ヨレ") : ""; }
+function nearName(n) { return n === "near" ? tr("ニア") : n === "regular" ? tr("レギュラー") : ""; }
+function speedName(s) { return s === "slow" ? tr("ゆっくり") : s === "normal" ? tr("普通") : s === "fast" ? tr("速い") : ""; }
+
+function escHtml(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+/* ===== データ読み込み =====
+   絞り込みに使う技・グラブ等は、ファイル名ではなく Videos×Log を entryId/rowId で結合して引く。
+   誰の動画が見えるかはサーバ(doGet)がトークンから決める。ここでは絞らない。 */
+var ITEMS = [];        /* 結合済みの表示用モデル */
+var SCOPED = false;    /* true = 選手モード(自分の分だけ) */
+var LOAD_STATE = "loading"; /* loading | ok | error | blocked */
+var BLOCK_CODE = "";
+
+function cacheKey() {
+  if (AUTH) return "ntairlog_cache_v1_" + (AUTH.role === "staff" ? "staff" : "a_" + (AUTH.athleteId || AUTH.token || ""));
+  return "ntairlog_cache_v1_" + (URL_TOKEN || "all");
+}
+function loadCache() { try { var s = localStorage.getItem(cacheKey()); if (!s) return null; var c = JSON.parse(s); return (c && c.athletes) ? c : null; } catch (e) { return null; } }
+
+function joinData(data) {
+  var entryById = {};
+  (data.records || []).forEach(function (e) { entryById[e.id] = e; });
+  /* 記録にathleteNameが入っていないアプリ(MICエアログ)もあるので、名簿からも引けるようにする */
+  var nameById = {};
+  (data.athletes || []).forEach(function (a) { nameById[a.id] = a.name; });
+  var items = (data.videos || []).map(function (v) {
+    var entry = entryById[v.entryId] || null;
+    var row = null;
+    if (entry && v.rowId) {
+      for (var i = 0; i < entry.rows.length; i++) { if (String(entry.rows[i].rowId) === String(v.rowId)) { row = entry.rows[i]; break; } }
+    }
+    var date = entry ? entry.date : (v.uploadedAt ? String(v.uploadedAt).slice(0, 10) : "");
+    var aid = v.athleteId || (entry ? entry.athlete : "");
+    return {
+      videoId: v.videoId,
+      url: v.sharedUrl,
+      uploadedAt: v.uploadedAt || "",
+      entryId: v.entryId || "",
+      rowId: v.rowId || "",
+      videoType: v.type || "",
+      athleteId: aid,
+      athleteName: (entry && entry.athleteName) || nameById[aid] || aid || "",
+      date: date,
+      facility: entry ? (entry.facility || "") : "",
+      kicker: entry ? (entry.kicker || "") : "",
+      trickId: row ? row.trickId : (v.trickId || ""),
+      grabType: row ? (row.grabType || "") : "",
+      near: row ? (row.near || "") : "",
+      result: row ? (row.result || "") : (v.type === "success" || v.type === "fail" ? v.type : ""),
+      speedLevel: row ? (row.speedLevel || "") : "",
+      note: row ? (row.note || "") : ""
+    };
+  });
+  return items;
+}
+
+function applyData(data) {
+  ITEMS = joinData(data);
+  SCOPED = data.scoped === true;
+  LOAD_STATE = "ok";
+}
+
+function fetchData() {
+  if (DEMO) { applyData(DEMO); renderAll(); return Promise.resolve(); }
+  var tok = effectiveToken();
+  var url = API_URL + (tok ? "?token=" + encodeURIComponent(tok) : "");
+  return fetch(url).then(function (res) {
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }).then(function (data) {
+    if (data && data.status === "error" && data.code) { LOAD_STATE = "blocked"; BLOCK_CODE = data.code; renderAll(); return; }
+    applyData(data);
+    renderAll();
+  });
+}
+function fetchWithRetry(attempts, delayMs) {
+  return fetchData().catch(function (err) {
+    if (attempts <= 1) { if (LOAD_STATE !== "ok") LOAD_STATE = "error"; renderAll(); throw err; }
+    return new Promise(function (r) { setTimeout(r, delayMs); }).then(function () { return fetchWithRetry(attempts - 1, Math.min(delayMs * 2, 8000)); });
+  });
+}
+
+/* ===== 絞り込み・並べ替え ===== */
+var FILTER = { athlete: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: "new" };
+var FILTER_OPEN = false;
+
+function filteredItems() {
+  var out = ITEMS.filter(function (it) {
+    if (FILTER.athlete && it.athleteId !== FILTER.athlete) return false;
+    if (FILTER.trick && it.trickId !== FILTER.trick) return false;
+    if (FILTER.grab && it.grabType !== FILTER.grab) return false;
+    if (FILTER.near && it.near !== FILTER.near) return false;
+    if (FILTER.result && it.result !== FILTER.result) return false;
+    if (FILTER.speed && it.speedLevel !== FILTER.speed) return false;
+    if (FILTER.facility && it.facility !== FILTER.facility) return false;
+    if (FILTER.kicker && it.kicker !== FILTER.kicker) return false;
+    if (FILTER.dateFrom && it.date && it.date < FILTER.dateFrom) return false;
+    if (FILTER.dateTo && it.date && it.date > FILTER.dateTo) return false;
+    return true;
+  });
+  out.sort(function (a, b) {
+    var ka = (a.date || "") + "|" + (a.uploadedAt || "");
+    var kb = (b.date || "") + "|" + (b.uploadedAt || "");
+    return FILTER.sort === "old" ? (ka < kb ? -1 : 1) : (ka < kb ? 1 : -1);
+  });
+  return out;
+}
+function uniqueOptions(field) {
+  var seen = {}; var out = [];
+  ITEMS.forEach(function (it) { var v = it[field]; if (v && !seen[v]) { seen[v] = 1; out.push(v); } });
+  return out;
+}
+function setFilter(k, v) { FILTER[k] = v; if (k === "facility") FILTER.kicker = ""; renderList(); renderFilter(); }
+function resetFilter() { FILTER = { athlete: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: FILTER.sort }; renderList(); renderFilter(); }
+function toggleFilter() { FILTER_OPEN = !FILTER_OPEN; renderFilter(); }
+
+/* ===== 選択(比較のAとB) ===== */
+var SEL = { a: null, b: null };
+function itemById(id) { for (var i = 0; i < ITEMS.length; i++) if (ITEMS[i].videoId === id) return ITEMS[i]; return null; }
+function toggleSelect(id) {
+  if (SEL.a === id) { SEL.a = SEL.b; SEL.b = null; }
+  else if (SEL.b === id) { SEL.b = null; }
+  else if (!SEL.a) { SEL.a = id; }
+  else if (!SEL.b) { SEL.b = id; }
+  else { SEL.b = id; } /* 両方埋まっていたらBを入れ替える */
+  renderList(); renderCmpBar();
+}
+function clearSelect() { SEL.a = null; SEL.b = null; renderList(); renderCmpBar(); }
+
+/* ===== 一覧の描画 ===== */
+function itemTitle(it) {
+  var parts = [trickName(it.trickId)];
+  if (it.grabType) parts.push(grabName(it.grabType));
+  if (it.near) parts.push(nearName(it.near));
+  return parts.join(" · ");
+}
+function itemShort(it) {
+  return (it.date || "") + " " + trickName(it.trickId) + (SCOPED ? "" : " " + (it.athleteName || ""));
+}
+function renderAll() { applyStaticText(); renderNotice(); renderFilter(); renderList(); renderCmpBar(); }
+
+function applyStaticText() {
+  document.getElementById("ttl").textContent = tr("動画ビューア");
+  document.getElementById("subttl").textContent = SCOPED ? tr("自分の動画を見返して、2本を並べて比較できます") : tr("全選手の動画を見て、2本を並べて比較できます");
+  document.getElementById("backLink").textContent = LANG === "en" ? CONFIG.HOME_LABEL_EN : CONFIG.HOME_LABEL_JA;
+  document.getElementById("backLink").href = "../" + (URL_TOKEN && !AUTH ? "?token=" + encodeURIComponent(URL_TOKEN) : "");
+  document.getElementById("langToggle").innerHTML =
+    '<span class="lang-toggle"><button type="button" class="lang-seg' + (LANG === "ja" ? " active" : "") + '" onclick="setLang(\'ja\')">JP</button>' +
+    '<button type="button" class="lang-seg' + (LANG === "en" ? " active" : "") + '" onclick="setLang(\'en\')">EN</button></span>';
+  document.getElementById("btnCvClose").textContent = tr("← 一覧");
+  document.getElementById("modeIndiv").textContent = tr("個別");
+  document.getElementById("modeSync").textContent = tr("同期");
+  document.getElementById("modeOverlay").textContent = tr("重ね");
+  document.getElementById("ovOpacityLabel").textContent = tr("Bの濃さ");
+  document.getElementById("ovTargetLabel").textContent = tr("操作対象");
+  document.getElementById("btnMirrorOv").textContent = tr("反転");
+  document.getElementById("overlayHint").textContent = tr("⚠ 撮影角度が違う2本を重ねると、実際には無い差が見えることがあります。同じ向き・近い角度の動画で使ってください。");
+  document.getElementById("indivHintTxt").textContent = tr("それぞれの動画で「離台（台を離れた瞬間）」のコマを探して設定してください。両方設定すると同期比較ができます。");
+  ["A", "B"].forEach(function (k) {
+    document.getElementById("setTakeoff" + k).textContent = tr("離台をここに設定");
+    document.getElementById("btnMirror" + k).textContent = tr("反転");
+    document.getElementById("mirrorBadge" + k).textContent = tr("反転中");
+  });
+  document.getElementById("playerClose").textContent = tr("閉じる");
+  document.getElementById("btnLoopA").textContent = tr("A点");
+  document.getElementById("btnLoopB").textContent = tr("B点");
+  document.getElementById("btnLoopClear").textContent = tr("解除");
+}
+
+function renderNotice() {
+  var el = document.getElementById("notice");
+  if (LOAD_STATE === "blocked") {
+    var msg = BLOCK_CODE === "login_required" ? tr("ログインが必要です。NTエアlogでログインしてから開いてください。") : tr("このリンクは有効ではありません。NTエアlogを開き直してください。");
+    el.innerHTML = '<div class="banner error">' + escHtml(msg) + '</div>';
+  } else if (LOAD_STATE === "error" && !ITEMS.length) {
+    el.innerHTML = '<div class="banner warn">' + escHtml(tr("読み込みに失敗しました")) + ' <a href="javascript:void(0)" onclick="retryLoad()">' + escHtml(tr("再試行")) + '</a></div>';
+  } else {
+    el.innerHTML = "";
+  }
+}
+function retryLoad() { LOAD_STATE = "loading"; renderNotice(); document.getElementById("listArea").innerHTML = '<div class="loading-note"><span class="spin"></span>' + escHtml(tr("読み込み中…")) + '</div>'; fetchWithRetry(3, 1500).catch(function () {}); }
+
+function selOption(current, value, label) {
+  return '<option value="' + escHtml(value) + '"' + (current === value ? " selected" : "") + '>' + escHtml(label) + '</option>';
+}
+function renderFilter() {
+  var area = document.getElementById("filterArea");
+  if (LOAD_STATE !== "ok" || (!ITEMS.length)) { area.innerHTML = ""; return; }
+  var shown = filteredItems().length;
+  var head = '<div class="filter-head" onclick="toggleFilter()">' +
+    '<span class="filter-title">' + escHtml(tr("絞り込み")) + " " + (FILTER_OPEN ? "▲" : "▼") + '</span>' +
+    '<span class="filter-count">' + shown + escHtml(tr("本を表示中")) + '</span></div>';
+  var body = "";
+  if (FILTER_OPEN) {
+    var g = '<div class="filter-grid">';
+    if (!SCOPED) {
+      var athOpts = {}; ITEMS.forEach(function (it) { if (it.athleteId && !athOpts[it.athleteId]) athOpts[it.athleteId] = it.athleteName || it.athleteId; });
+      var athHtml = selOption(FILTER.athlete, "", tr("すべて"));
+      Object.keys(athOpts).forEach(function (id) { athHtml += selOption(FILTER.athlete, id, athOpts[id]); });
+      g += '<div class="full"><label class="field-label">' + escHtml(tr("選手")) + '</label><select class="select-input" onchange="setFilter(\'athlete\', this.value)">' + athHtml + '</select></div>';
+    }
+    /* そのアプリのデータに存在しない項目は欄ごと隠す。
+       MICエアログにはグラブ・ニア/レギュラーが無いので、空の選択肢だけが並ぶのを防ぐ。 */
+    function addField(key, label, options) {
+      if (!options.length) return;
+      var html = selOption(FILTER[key], "", tr("すべて"));
+      options.forEach(function (o) { html += selOption(FILTER[key], o.v, o.l); });
+      g += '<div><label class="field-label">' + escHtml(label) + '</label><select class="select-input" onchange="setFilter(\'' + key + '\', this.value)">' + html + '</select></div>';
+    }
+    function present(field, values) {
+      var seen = {}; ITEMS.forEach(function (it) { if (it[field]) seen[it[field]] = 1; });
+      return values.filter(function (o) { return seen[o.v]; });
+    }
+    addField("trick", tr("技"), uniqueOptions("trickId").map(function (id) { return { v: id, l: trickName(id) }; }));
+    addField("grab", tr("グラブ"), uniqueOptions("grabType").map(function (id) { return { v: id, l: grabName(id) }; }));
+    addField("near", tr("ニア/レギュラー"), present("near", [{ v: "near", l: tr("ニア") }, { v: "regular", l: tr("レギュラー") }]));
+    addField("result", tr("結果"), present("result", [{ v: "success", l: tr("成功") }, { v: "fail", l: tr("失敗") }, { v: "yure", l: tr("ヨレ") }]));
+    addField("speed", tr("進入スピード"), present("speedLevel", [{ v: "slow", l: tr("ゆっくり") }, { v: "normal", l: tr("普通") }, { v: "fast", l: tr("速い") }]));
+    addField("facility", tr("施設"), uniqueOptions("facility").map(function (f) { return { v: f, l: f }; }));
+    var kicks = {}; ITEMS.forEach(function (it) { if ((!FILTER.facility || it.facility === FILTER.facility) && it.kicker) kicks[it.kicker] = 1; });
+    addField("kicker", tr("台"), Object.keys(kicks).map(function (kk) { return { v: kk, l: kk }; }));
+    g += '<div><label class="field-label">' + escHtml(tr("開始日")) + '</label><input type="date" class="date-input" value="' + escHtml(FILTER.dateFrom) + '" onchange="setFilter(\'dateFrom\', this.value)"></div>';
+    g += '<div><label class="field-label">' + escHtml(tr("終了日")) + '</label><input type="date" class="date-input" value="' + escHtml(FILTER.dateTo) + '" onchange="setFilter(\'dateTo\', this.value)"></div>';
+    g += '</div>';
+    g += '<div class="sort-row">' +
+      '<button class="sort-btn' + (FILTER.sort === "new" ? " active" : "") + '" onclick="setFilter(\'sort\',\'new\')">' + escHtml(tr("新しい順")) + '</button>' +
+      '<button class="sort-btn' + (FILTER.sort === "old" ? " active" : "") + '" onclick="setFilter(\'sort\',\'old\')">' + escHtml(tr("古い順")) + '</button>' +
+      '<button class="clear-btn" onclick="resetFilter()">' + escHtml(tr("リセット")) + '</button></div>';
+    body = g;
+  }
+  area.innerHTML = '<div class="filter-card">' + head + body + '</div>';
+}
+
+function renderList() {
+  var area = document.getElementById("listArea");
+  if (LOAD_STATE === "loading") return;
+  if (LOAD_STATE === "blocked") { area.innerHTML = ""; return; }
+  if (!ITEMS.length) {
+    if (LOAD_STATE === "error") { area.innerHTML = ""; return; }
+    area.innerHTML = '<div class="empty-note">🎬<br>' + escHtml(tr("動画がまだありません")) + '<br><span style="font-size:11px;">' + escHtml(tr("アップロードした動画がここに表示されます")) + '</span></div>';
+    return;
+  }
+  var list = filteredItems();
+  if (!list.length) { area.innerHTML = '<div class="empty-note">' + escHtml(tr("条件に合う動画がありません")) + '</div>'; return; }
+  var html = '<div class="video-list">';
+  list.forEach(function (it) {
+    var selCls = SEL.a === it.videoId ? " selA" : SEL.b === it.videoId ? " selB" : "";
+    var selBadge = SEL.a === it.videoId ? '<span class="badge sel selA-badge">A</span>' : SEL.b === it.videoId ? '<span class="badge sel selB-badge">B</span>' : "";
+    var resBadge = it.result ? '<span class="badge ' + escHtml(it.result) + '">' + escHtml(resultName(it.result)) + '</span>' : "";
+    var sub = [];
+    if (it.facility) sub.push(it.facility + (it.kicker ? " · " + it.kicker : ""));
+    if (it.speedLevel) sub.push(speedName(it.speedLevel));
+    html += '<div class="video-card' + selCls + '">' +
+      '<div class="vc-top"><span class="vc-date">' + escHtml(it.date || "") + '</span>' +
+      (!SCOPED ? '<span class="vc-athlete">' + escHtml(it.athleteName || "") + '</span>' : "") +
+      resBadge + selBadge + '</div>' +
+      '<div class="vc-main">' + escHtml(itemTitle(it)) + '</div>' +
+      (sub.length ? '<div class="vc-sub">' + escHtml(sub.join(" ｜ ")) + '</div>' : "") +
+      (it.note ? '<div class="vc-note">' + escHtml(it.note) + '</div>' : "") +
+      '<div class="vc-actions">' +
+      '<button class="vc-btn play" onclick="openPlayer(\'' + escHtml(it.videoId) + '\')">▶ ' + escHtml(tr("再生")) + '</button>' +
+      '<button class="vc-btn compare' + (selCls ? " on" : "") + '" onclick="toggleSelect(\'' + escHtml(it.videoId) + '\')">' + escHtml(selCls ? tr("選択中") : tr("比較に追加")) + '</button>' +
+      '</div></div>';
+  });
+  html += '</div>';
+  area.innerHTML = html;
+}
+
+function renderCmpBar() {
+  var bar = document.getElementById("cmpBar");
+  var any = SEL.a || SEL.b;
+  bar.hidden = !any;
+  if (!any) return;
+  var ia = SEL.a ? itemById(SEL.a) : null;
+  var ib = SEL.b ? itemById(SEL.b) : null;
+  var slotA = document.getElementById("slotA");
+  var slotB = document.getElementById("slotB");
+  slotA.textContent = "A: " + (ia ? itemShort(ia) : "−");
+  slotB.textContent = "B: " + (ib ? itemShort(ib) : "−");
+  slotA.className = "cmp-slot" + (ia ? " filled-a" : "");
+  slotB.className = "cmp-slot" + (ib ? " filled-b" : "");
+  document.getElementById("btnGoCompare").disabled = !(ia && ib);
+  document.getElementById("btnGoCompare").textContent = tr("比較");
+}
+
+/* ===== 単体再生 =====
+   比較しないで1本だけ見るときも、コマ送り・倍速・スクラブができるようにする。
+   ブラウザ標準のコントロールにはコマ送りが無いため、比較ビューと同じ操作列を自前で置く。 */
+var PLAYER_RATE = 1;
+function playerEl() { return document.getElementById("playerVideo"); }
+function openPlayer(id) {
+  var it = itemById(id); if (!it) return;
+  var v = playerEl();
+  v.src = it.url;
+  v.playbackRate = PLAYER_RATE;
+  document.getElementById("playerCaption").textContent = itemShort(it);
+  document.getElementById("playerModal").classList.add("open");
+  updatePlayerRateUI();
+  updatePlayerUI();
+  v.play().catch(function () {});
+}
+function closePlayer() {
+  var v = playerEl();
+  v.pause(); v.removeAttribute("src"); v.load();
+  document.getElementById("playerModal").classList.remove("open");
+}
+function playerTogglePlay() {
+  var v = playerEl();
+  if (v.paused) {
+    if (v.duration && v.currentTime >= v.duration - 0.03) v.currentTime = 0;
+    v.playbackRate = PLAYER_RATE;
+    v.play().catch(function () {});
+  } else { v.pause(); }
+  updatePlayerUI();
+}
+function playerStep(dir) {
+  var v = playerEl();
+  v.pause();
+  var dur = v.duration || 0;
+  v.currentTime = Math.min(Math.max(v.currentTime + dir * FRAME, 0), Math.max(dur - 0.001, 0));
+  updatePlayerUI();
+}
+function setPlayerRate(r) { PLAYER_RATE = r; playerEl().playbackRate = r; updatePlayerRateUI(); }
+function updatePlayerRateUI() {
+  var btns = document.getElementById("playerRateGroup").querySelectorAll("button");
+  for (var i = 0; i < btns.length; i++) btns[i].className = (Number(btns[i].getAttribute("data-rate")) === PLAYER_RATE) ? "active" : "";
+}
+function updatePlayerUI() {
+  var v = playerEl();
+  document.getElementById("playerPlay").textContent = v.paused ? "▶" : "⏸";
+  var dur = v.duration || 0;
+  document.getElementById("playerTime").textContent = v.currentTime.toFixed(2) + " / " + dur.toFixed(2) + "s";
+  var seek = document.getElementById("playerSeek");
+  if (!seek.__dragging && dur) seek.value = Math.round(v.currentTime / dur * 1000);
+}
+
+/* ===== 比較ビュー =====
+   時間軸の原点 = 各動画の「離台」。T(秒) = 離台からの相対時間。
+   同期モードでは、両方の動画を「離台+T」の位置に揃える。
+   完全な同期は保証できないため、残り時間が長い方をマスターにし、
+   もう片方は定期的に位置を補正する。 */
+var CMP = {
+  open: false, mode: "indiv", layout: "split", ovTarget: "b", playing: false, buffering: false, rate: 1,
+  loopA: null, loopB: null,
+  a: null, b: null   /* {item, takeoff, mirror, scale, tx, ty, dur} */
+};
+var TAKEOFF_STORE = (function () { try { var s = localStorage.getItem("ntairlog_takeoff_v1"); return s ? JSON.parse(s) : {}; } catch (e) { return {}; } })();
+function saveTakeoff(videoId, t) {
+  TAKEOFF_STORE[videoId] = t;
+  try { localStorage.setItem("ntairlog_takeoff_v1", JSON.stringify(TAKEOFF_STORE)); } catch (e) {}
+}
+var FRAME = 1 / 30; /* コマ送りの1コマ。可変フレームレート動画があるため近似 */
+
+function vidEl(k) { return document.getElementById(k === "a" ? "vidA" : "vidB"); }
+function paneState(k) { return CMP[k]; }
+
+function openCompare() {
+  var ia = itemById(SEL.a), ib = itemById(SEL.b);
+  if (!ia || !ib) return;
+  CMP.open = true; CMP.playing = false; CMP.buffering = false; CMP.rate = 1; CMP.loopA = null; CMP.loopB = null;
+  CMP.a = { item: ia, takeoff: TAKEOFF_STORE[ia.videoId] || 0, hasTakeoff: TAKEOFF_STORE[ia.videoId] != null, mirror: false, scale: 1, tx: 0, ty: 0, dur: 0 };
+  CMP.b = { item: ib, takeoff: TAKEOFF_STORE[ib.videoId] || 0, hasTakeoff: TAKEOFF_STORE[ib.videoId] != null, mirror: false, scale: 1, tx: 0, ty: 0, dur: 0 };
+  var va = vidEl("a"), vb = vidEl("b");
+  va.src = ia.url; vb.src = ib.url;
+  va.playbackRate = 1; vb.playbackRate = 1;
+  document.getElementById("labelA").textContent = itemShort(ia);
+  document.getElementById("labelB").textContent = itemShort(ib);
+  setMode(CMP.a.hasTakeoff && CMP.b.hasTakeoff ? "sync" : "indiv");
+  applyPaneTransform("a"); applyPaneTransform("b");
+  updateTakeoffFlags(); updateRateUI(); updateLoopUI(); updatePlayUI();
+  document.getElementById("compareView").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function closeCompare() {
+  CMP.open = false; CMP.playing = false;
+  var va = vidEl("a"), vb = vidEl("b");
+  va.pause(); vb.pause();
+  va.removeAttribute("src"); vb.removeAttribute("src"); va.load(); vb.load();
+  document.getElementById("compareView").hidden = true;
+  document.body.style.overflow = "";
+}
+
+function setMode(m, layout) {
+  CMP.mode = m; CMP.layout = layout || "split"; CMP.playing = false;
+  vidEl("a").pause(); vidEl("b").pause();
+  document.getElementById("modeIndiv").className = m === "indiv" ? "active" : "";
+  document.getElementById("modeSync").className = (m === "sync" && CMP.layout === "split") ? "active" : "";
+  document.getElementById("modeOverlay").className = (m === "sync" && CMP.layout === "overlay") ? "active" : "";
+  document.getElementById("ctrlA").style.display = m === "indiv" ? "" : "none";
+  document.getElementById("ctrlB").style.display = m === "indiv" ? "" : "none";
+  document.getElementById("syncCtrl").hidden = m !== "sync";
+  document.getElementById("indivHint").hidden = m !== "indiv";
+  /* 重ねモードの表示切り替え */
+  var overlay = CMP.layout === "overlay";
+  document.getElementById("cmpPanes").className = overlay ? "overlay" : "";
+  document.getElementById("overlayRow").hidden = !overlay;
+  document.getElementById("overlayHint").hidden = !overlay;
+  vidEl("b").style.opacity = overlay ? (document.getElementById("opacityRange").value / 100) : "";
+  if (m === "sync") { setT(clampT(0)); updateSyncHint(); }
+  updatePlayUI();
+}
+
+/* ---- 離台 ---- */
+function setTakeoff(k) {
+  var p = paneState(k); var v = vidEl(k);
+  p.takeoff = v.currentTime; p.hasTakeoff = true;
+  saveTakeoff(p.item.videoId, p.takeoff);
+  updateTakeoffFlags();
+  if (CMP.a.hasTakeoff && CMP.b.hasTakeoff && CMP.mode === "indiv") setMode("sync");
+}
+function fmtSec(t) { return (t < 0 ? "-" : "") + Math.abs(t).toFixed(2) + "s"; }
+function updateTakeoffFlags() {
+  ["a", "b"].forEach(function (k) {
+    var p = paneState(k);
+    var el = document.getElementById(k === "a" ? "takeoffFlagA" : "takeoffFlagB");
+    el.textContent = tr("離台") + ": " + (p.hasTakeoff ? "✓ " + fmtSec(p.takeoff) : tr("未設定"));
+  });
+  updateSyncHint();
+}
+function updateSyncHint() {
+  var el = document.getElementById("syncHint");
+  if (CMP.buffering) { el.textContent = tr("片方の読み込み待ちで一時停止中…"); el.className = "hint-line warn"; return; }
+  if (!CMP.a || !CMP.b) return;
+  if (CMP.a.hasTakeoff && CMP.b.hasTakeoff) { el.textContent = tr("離台を基準に2本が揃っています"); el.className = "hint-line"; }
+  else { el.textContent = tr("離台が未設定の動画があります（動画の先頭を離台として扱っています）"); el.className = "hint-line warn"; }
+}
+
+/* ---- 同期の時間軸 ---- */
+function tRange() {
+  var a = CMP.a, b = CMP.b;
+  var tmin = Math.min(-a.takeoff, -b.takeoff);
+  var tmax = Math.max((a.dur || 0) - a.takeoff, (b.dur || 0) - b.takeoff);
+  if (tmax <= tmin) tmax = tmin + 0.1;
+  return { min: tmin, max: tmax };
+}
+function clampT(t) { var r = tRange(); return Math.min(Math.max(t, r.min), r.max); }
+function currentT() {
+  var m = masterKey();
+  var p = paneState(m);
+  return vidEl(m).currentTime - p.takeoff;
+}
+function masterKey() {
+  /* 残り時間(離台後の長さ)が長い方をマスターにする */
+  var ta = (CMP.a.dur || 0) - CMP.a.takeoff;
+  var tb = (CMP.b.dur || 0) - CMP.b.takeoff;
+  return ta >= tb ? "a" : "b";
+}
+function setT(t) {
+  t = clampT(t);
+  ["a", "b"].forEach(function (k) {
+    var p = paneState(k); var v = vidEl(k);
+    var ct = p.takeoff + t;
+    var max = (p.dur || v.duration || 0) - 0.001;
+    v.currentTime = Math.min(Math.max(ct, 0), Math.max(max, 0));
+  });
+  updateTimeUI(t);
+}
+function updateTimeUI(t) {
+  if (t == null) t = currentT();
+  var lbl = document.getElementById("timeLabel");
+  lbl.textContent = tr("離台") + " " + (t >= 0 ? "+" : "−") + Math.abs(t).toFixed(2) + "s";
+  var r = tRange();
+  var range = document.getElementById("seekSync");
+  var pos = (t - r.min) / (r.max - r.min);
+  if (!range.__dragging) range.value = Math.round(pos * 1000);
+}
+
+/* ---- 再生制御 ---- */
+function playBoth() {
+  var va = vidEl("a"), vb = vidEl("b");
+  CMP.playing = true; CMP.buffering = false;
+  va.playbackRate = CMP.rate; vb.playbackRate = CMP.rate;
+  /* ユーザー操作のイベント内で2本とも play() を呼ぶ(自動再生制限対策)。
+     期待位置が範囲外(まだ離台前が無い/終わった)のペーンは syncTick が止める。 */
+  va.play().catch(function () {});
+  vb.play().catch(function () {});
+  if (!RAF_ID) RAF_ID = requestAnimationFrame(rafTick);
+  updatePlayUI();
+}
+function pauseBoth() {
+  CMP.playing = false; CMP.buffering = false;
+  if (RAF_ID) { cancelAnimationFrame(RAF_ID); RAF_ID = null; }
+  vidEl("a").pause(); vidEl("b").pause();
+  updatePlayUI();
+}
+/* A–Bループの境界と終端は、250msの監視だと最大0.25秒行き過ぎるので
+   描画フレームごと(約16ms)に見る。ズレ補正やバッファリング対応は250ms側のまま。 */
+var RAF_ID = null;
+function rafTick() {
+  if (!CMP.open || !CMP.playing || CMP.mode !== "sync") { RAF_ID = null; return; }
+  var t = currentT();
+  if (CMP.loopA != null && CMP.loopB != null && t > CMP.loopB) { setT(CMP.loopA); }
+  else if (t >= tRange().max - 0.03) { pauseBoth(); return; }
+  RAF_ID = requestAnimationFrame(rafTick);
+}
+function togglePlaySync() { if (CMP.playing) { pauseBoth(); } else { if (currentT() >= tRange().max - 0.05) setT(tRange().min); playBoth(); } }
+function updatePlayUI() {
+  document.getElementById("playSync").textContent = CMP.playing ? "⏸" : "▶";
+  document.getElementById("playA").textContent = (!vidEl("a").paused) ? "⏸" : "▶";
+  document.getElementById("playB").textContent = (!vidEl("b").paused) ? "⏸" : "▶";
+}
+function setRate(r) {
+  CMP.rate = r;
+  vidEl("a").playbackRate = r; vidEl("b").playbackRate = r;
+  updateRateUI();
+}
+function updateRateUI() {
+  var btns = document.getElementById("rateGroup").querySelectorAll("button");
+  for (var i = 0; i < btns.length; i++) btns[i].className = (Number(btns[i].getAttribute("data-rate")) === CMP.rate) ? "active" : "";
+}
+function stepSync(dir) { pauseBoth(); setT(currentT() + dir * FRAME); }
+
+/* A–B区間ループ */
+function setLoopPoint(which) {
+  var t = currentT();
+  if (which === "a") CMP.loopA = t; else CMP.loopB = t;
+  if (CMP.loopA != null && CMP.loopB != null && CMP.loopB < CMP.loopA) { var tmp = CMP.loopA; CMP.loopA = CMP.loopB; CMP.loopB = tmp; }
+  updateLoopUI();
+}
+function clearLoop() { CMP.loopA = null; CMP.loopB = null; updateLoopUI(); }
+function updateLoopUI() {
+  var on = CMP.loopA != null && CMP.loopB != null;
+  document.getElementById("btnLoopA").className = "t-btn" + (CMP.loopA != null ? " on" : "");
+  document.getElementById("btnLoopB").className = "t-btn" + (CMP.loopB != null ? " on" : "");
+  document.getElementById("btnLoopClear").hidden = !on;
+}
+
+/* ---- 同期の監視ループ ----
+   ・マスターの時刻から T を求め、もう片方がズレていたら補正(0.08秒以上)
+   ・期待位置が動画の範囲外のペーンは、先頭/末尾で止めておく
+   ・どちらかがバッファリングしたら両方止め、両方再生可能になったら再開
+   ・A–Bループ */
+setInterval(function () {
+  if (!CMP.open) return;
+  updatePlayUI();
+  if (CMP.mode !== "sync") return;
+  var t = currentT();
+  if (CMP.playing) {
+    if (CMP.loopA != null && CMP.loopB != null && t > CMP.loopB) { setT(CMP.loopA); t = CMP.loopA; }
+    if (t >= tRange().max - 0.03) { pauseBoth(); return; }
+    var mk = masterKey();
+    ["a", "b"].forEach(function (k) {
+      var p = paneState(k); var v = vidEl(k);
+      var expected = p.takeoff + t;
+      var end = (p.dur || v.duration || 0) - 0.03;
+      if (expected <= 0.001) { if (!v.paused) v.pause(); if (Math.abs(v.currentTime) > 0.05) v.currentTime = 0; return; }
+      if (expected >= end) { if (!v.paused) v.pause(); return; }
+      if (CMP.buffering) return;
+      if (v.paused) { v.playbackRate = CMP.rate; v.play().catch(function () {}); }
+      if (k !== mk && Math.abs(v.currentTime - expected) > 0.08) v.currentTime = expected;
+    });
+    if (CMP.buffering) {
+      var ra = vidEl("a").readyState, rb = vidEl("b").readyState;
+      if (ra >= 3 && rb >= 3) { CMP.buffering = false; updateSyncHint(); playBoth(); }
+    }
+  }
+  updateTimeUI(t);
+}, 250);
+
+["a", "b"].forEach(function (k) {
+  var v = vidEl(k);
+  v.addEventListener("loadedmetadata", function () {
+    paneState(k).dur = v.duration || 0;
+    var seek = document.getElementById(k === "a" ? "seekA" : "seekB");
+    seek.max = 1000;
+    /* 最初のフレームを確実に描画させる(黒画面のまま止まる端末があるため) */
+    if (v.currentTime === 0) { try { v.currentTime = 0.001; } catch (e) {} }
+    if (CMP.mode === "sync") setT(clampT(currentT()));
+  });
+  v.addEventListener("waiting", function () {
+    if (CMP.open && CMP.mode === "sync" && CMP.playing && !CMP.buffering) {
+      CMP.buffering = true;
+      vidEl("a").pause(); vidEl("b").pause();
+      updateSyncHint();
+    }
+  });
+  v.addEventListener("timeupdate", function () {
+    if (CMP.mode !== "indiv") return;
+    var seek = document.getElementById(k === "a" ? "seekA" : "seekB");
+    if (!seek.__dragging && v.duration) seek.value = Math.round(v.currentTime / v.duration * 1000);
+  });
+});
+
+/* ---- 個別モードの操作 ---- */
+function indivSeek(k, val) {
+  var v = vidEl(k);
+  if (v.duration) v.currentTime = (val / 1000) * v.duration;
+}
+function indivStep(k, dir) {
+  var v = vidEl(k); v.pause();
+  v.currentTime = Math.min(Math.max(v.currentTime + dir * FRAME, 0), Math.max((v.duration || 0) - 0.001, 0));
+  updatePlayUI();
+}
+function indivPlay(k) {
+  var v = vidEl(k);
+  if (v.paused) { v.playbackRate = CMP.rate; v.play().catch(function () {}); } else { v.pause(); }
+  updatePlayUI();
+}
+
+/* ---- 反転・拡大・移動 ---- */
+function applyPaneTransform(k) {
+  var p = paneState(k); var v = vidEl(k);
+  v.style.transform = "translate(" + p.tx + "px," + p.ty + "px) scale(" + (p.scale * (p.mirror ? -1 : 1)) + "," + p.scale + ")";
+  document.getElementById(k === "a" ? "mirrorBadgeA" : "mirrorBadgeB").hidden = !p.mirror;
+  document.getElementById(k === "a" ? "btnMirrorA" : "btnMirrorB").className = "pane-btn" + (p.mirror ? " on" : "");
+  document.getElementById(k === "a" ? "btnZoomResetA" : "btnZoomResetB").hidden = (p.scale === 1 && p.tx === 0 && p.ty === 0);
+}
+function toggleMirror(k) { var p = paneState(k); p.mirror = !p.mirror; applyPaneTransform(k); }
+function resetZoom(k) { var p = paneState(k); p.scale = 1; p.tx = 0; p.ty = 0; applyPaneTransform(k); }
+
+function setupGestures(k) {
+  var pane = document.getElementById(k === "a" ? "paneA" : "paneB");
+  var pointers = {};
+  var pinchStart = null;
+  var lastTap = 0;
+  /* 重ねモードでは上に乗っているBのペーンが操作を受けるので、
+     「操作対象」で選ばれている方の動画に適用する */
+  function tgt() { return CMP.layout === "overlay" ? CMP.ovTarget : k; }
+  pane.addEventListener("pointerdown", function (e) {
+    if (e.target.closest(".pane-ctrl") || e.target.closest(".pane-btns")) return;
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    pane.setPointerCapture(e.pointerId);
+    var ids = Object.keys(pointers);
+    var p = paneState(tgt());
+    if (ids.length === 2) {
+      var p1 = pointers[ids[0]], p2 = pointers[ids[1]];
+      pinchStart = {
+        dist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
+        scale: p.scale,
+        cx: (p1.x + p2.x) / 2, cy: (p1.y + p2.y) / 2,
+        tx: p.tx, ty: p.ty
+      };
+    } else if (ids.length === 1) {
+      var now = Date.now();
+      if (now - lastTap < 300) { resetZoom(tgt()); }
+      lastTap = now;
+      pinchStart = null;
+      pointers[e.pointerId].startTx = p.tx;
+      pointers[e.pointerId].startTy = p.ty;
+      pointers[e.pointerId].startX = e.clientX;
+      pointers[e.pointerId].startY = e.clientY;
+    }
+  });
+  pane.addEventListener("pointermove", function (e) {
+    if (!pointers[e.pointerId]) return;
+    pointers[e.pointerId].x = e.clientX; pointers[e.pointerId].y = e.clientY;
+    var ids = Object.keys(pointers);
+    var p = paneState(tgt());
+    if (ids.length === 2 && pinchStart) {
+      var p1 = pointers[ids[0]], p2 = pointers[ids[1]];
+      var dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+      var cx = (p1.x + p2.x) / 2, cy = (p1.y + p2.y) / 2;
+      p.scale = Math.min(Math.max(pinchStart.scale * (dist / pinchStart.dist), 1), 5);
+      p.tx = pinchStart.tx + (cx - pinchStart.cx);
+      p.ty = pinchStart.ty + (cy - pinchStart.cy);
+      if (p.scale === 1) { p.tx = 0; p.ty = 0; }
+      applyPaneTransform(tgt());
+    } else if (ids.length === 1 && p.scale > 1) {
+      var pt = pointers[ids[0]];
+      if (pt.startX != null) {
+        p.tx = pt.startTx + (e.clientX - pt.startX);
+        p.ty = pt.startTy + (e.clientY - pt.startY);
+        applyPaneTransform(tgt());
+      }
+    }
+  });
+  function release(e) { delete pointers[e.pointerId]; if (Object.keys(pointers).length < 2) pinchStart = null; }
+  pane.addEventListener("pointerup", release);
+  pane.addEventListener("pointercancel", release);
+  /* PC: ホイールで拡大縮小 */
+  pane.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var p = paneState(tgt());
+    p.scale = Math.min(Math.max(p.scale * (e.deltaY < 0 ? 1.1 : 0.9), 1), 5);
+    if (p.scale === 1) { p.tx = 0; p.ty = 0; }
+    applyPaneTransform(tgt());
+  }, { passive: false });
+}
+
+/* ===== イベント登録 ===== */
+document.getElementById("btnGoCompare").addEventListener("click", openCompare);
+document.getElementById("btnClearSel").addEventListener("click", clearSelect);
+document.getElementById("btnCvClose").addEventListener("click", closeCompare);
+document.getElementById("modeIndiv").addEventListener("click", function () { setMode("indiv"); });
+document.getElementById("modeSync").addEventListener("click", function () { setMode("sync"); });
+document.getElementById("modeOverlay").addEventListener("click", function () { setMode("sync", "overlay"); });
+document.getElementById("opacityRange").addEventListener("input", function () {
+  if (CMP.layout === "overlay") vidEl("b").style.opacity = this.value / 100;
+});
+(function () {
+  var btns = document.getElementById("ovTargetGroup").querySelectorAll("button");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function () {
+      CMP.ovTarget = this.getAttribute("data-t");
+      for (var j = 0; j < btns.length; j++) btns[j].className = btns[j] === this ? "active" : "";
+    });
+  }
+})();
+document.getElementById("btnMirrorOv").addEventListener("click", function () { toggleMirror(CMP.ovTarget); });
+document.getElementById("playSync").addEventListener("click", togglePlaySync);
+document.getElementById("stepBackSync").addEventListener("click", function () { stepSync(-1); });
+document.getElementById("stepFwdSync").addEventListener("click", function () { stepSync(1); });
+document.getElementById("btnLoopA").addEventListener("click", function () { setLoopPoint("a"); });
+document.getElementById("btnLoopB").addEventListener("click", function () { setLoopPoint("b"); });
+document.getElementById("btnLoopClear").addEventListener("click", clearLoop);
+(function () {
+  var btns = document.getElementById("rateGroup").querySelectorAll("button");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function () { setRate(Number(this.getAttribute("data-rate"))); });
+  }
+})();
+(function () {
+  var range = document.getElementById("seekSync");
+  function apply() {
+    var r = tRange();
+    var t = r.min + (range.value / 1000) * (r.max - r.min);
+    pauseBoth(); setT(t);
+  }
+  range.addEventListener("input", function () { range.__dragging = true; apply(); });
+  range.addEventListener("change", function () { range.__dragging = false; apply(); });
+})();
+["a", "b"].forEach(function (k) {
+  var K = k.toUpperCase();
+  document.getElementById("setTakeoff" + K).addEventListener("click", function () { setTakeoff(k); });
+  document.getElementById("btnMirror" + K).addEventListener("click", function () { toggleMirror(k); });
+  document.getElementById("btnZoomReset" + K).addEventListener("click", function () { resetZoom(k); });
+  document.getElementById("stepBack" + K).addEventListener("click", function () { indivStep(k, -1); });
+  document.getElementById("stepFwd" + K).addEventListener("click", function () { indivStep(k, 1); });
+  document.getElementById("play" + K).addEventListener("click", function () { indivPlay(k); });
+  var seek = document.getElementById("seek" + K);
+  seek.addEventListener("input", function () { seek.__dragging = true; vidEl(k).pause(); indivSeek(k, seek.value); });
+  seek.addEventListener("change", function () { seek.__dragging = false; indivSeek(k, seek.value); });
+  setupGestures(k);
+});
+document.getElementById("playerClose").addEventListener("click", closePlayer);
+document.getElementById("playerModal").addEventListener("click", function (e) { if (e.target === this) closePlayer(); });
+document.getElementById("playerPlay").addEventListener("click", playerTogglePlay);
+document.getElementById("playerStepBack").addEventListener("click", function () { playerStep(-1); });
+document.getElementById("playerStepFwd").addEventListener("click", function () { playerStep(1); });
+(function () {
+  var btns = document.getElementById("playerRateGroup").querySelectorAll("button");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function () { setPlayerRate(Number(this.getAttribute("data-rate"))); });
+  }
+})();
+(function () {
+  var seek = document.getElementById("playerSeek");
+  function apply() {
+    var v = playerEl();
+    if (v.duration) v.currentTime = (seek.value / 1000) * v.duration;
+    updatePlayerUI();
+  }
+  seek.addEventListener("input", function () { seek.__dragging = true; playerEl().pause(); apply(); });
+  seek.addEventListener("change", function () { seek.__dragging = false; apply(); });
+})();
+(function () {
+  var v = playerEl();
+  /* 動画をタップしても再生/停止できるようにする(標準コントロールを外したため) */
+  v.addEventListener("click", playerTogglePlay);
+  v.addEventListener("loadedmetadata", updatePlayerUI);
+  v.addEventListener("timeupdate", updatePlayerUI);
+  v.addEventListener("play", updatePlayerUI);
+  v.addEventListener("pause", updatePlayerUI);
+  v.addEventListener("ended", updatePlayerUI);
+})();
+
+/* ===== 起動 ===== */
+applyStaticText();
+(function () {
+  var cached = DEMO ? null : loadCache();
+  if (cached) { applyData(cached); renderAll(); }
+  fetchWithRetry(3, 1500).catch(function () {});
+})();
+</script>
+</body>
+</html>
