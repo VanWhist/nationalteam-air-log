@@ -3139,9 +3139,30 @@ render();
 });
 }
 
+/* アドレスバーから ?invite= と ?reset= だけを取り除く。
+初回設定を終えた直後に「ホーム画面に追加」すると、招待リンクのURLがアイコンに焼き付く。
+招待は1回きりなので、次に起動したときは毎回「このリンクは有効ではありません」になる。
+設定が済んだ時点でURLを綺麗にしておけば、そのあと追加したアイコンは普通にアプリが開く。
+?token= は選手の個人リンクなので消さない。 */
+function stripAuthParamsFromUrl() {
+try {
+if (!window.history || !history.replaceState) return;
+if (!INVITE_TOKEN && !RESET_TOKEN) return;
+var kept = [];
+location.search.replace(/^\?/, "").split("&").forEach(function (kv) {
+if (!kv) return;
+var k = kv.split("=")[0];
+if (k === "invite" || k === "reset") return;
+kept.push(kv);
+});
+history.replaceState(null, "", location.pathname + (kept.length ? "?" + kept.join("&") : "") + location.hash);
+} catch (e) {}
+}
+
 /* ログイン成功後は、前の利用者のキャッシュが画面に残らないよう必ず読み直す。 */
 function authAdoptSession(res) {
 clearAllCaches();
+stripAuthParamsFromUrl();
 saveAuth({
 token: res.token || "", role: res.role, athleteId: res.athleteId || "",
 displayName: res.displayName || "", staffRole: res.staffRole || "", email: res.email || ""
@@ -3197,6 +3218,7 @@ render();
 function doResetPassword() {
 if (!authValidateNewPassword()) return;
 authPost({ type: "authResetPassword", resetToken: RESET_TOKEN, password: AUTH_UI.pw }, function (res) {
+stripAuthParamsFromUrl();
 AUTH_UI.info = res.message || "";
 AUTH_UI.screen = "login";
 AUTH_UI.pw = ""; AUTH_UI.pw2 = "";
@@ -3355,6 +3377,16 @@ return (
 function loadInviteInfo() {
 apiPost({ type: "authInviteInfo", inviteToken: INVITE_TOKEN }).then(function (res) {
 if (!res || res.status !== "ok") {
+/* 既にログイン済みの人が、使用済みの招待リンク(ホーム画面のアイコンなど)から
+開いた場合は、行き止まりの画面を出さずに普通のアプリとして開く。 */
+if (AUTH) {
+stripAuthParamsFromUrl();
+INVITE_TOKEN = "";
+AUTH_UI.screen = "";
+AUTH_UI.error = "";
+loadAll();
+return;
+}
 AUTH_UI.blockedCode = "invite_invalid";
 AUTH_UI.error = (res && res.message) || "";
 showAuthScreen("blocked");
