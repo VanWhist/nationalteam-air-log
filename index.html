@@ -835,15 +835,22 @@ return VIDEOS.filter(function (v) { return v.entryId === entryId; });
 var VIDEO_CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
 var VIDEO_MAX_SIZE = 500 * 1024 * 1024; // 500MB
 
-/* 動画アップロードを許可する選手(暫定措置)。
-NTエアlogは現在、MICエアログのDropboxアプリの認証情報を借りて動画を保存しているため、
-保存先が /アプリ/MICエアログ動画/選手名/ になる。そこで、MICにも所属していてもともと
-同じ場所に動画がある林遼真(a86206408)だけに限定している。他の選手はNT専用のDropbox、
-またはJISSシェアを別途用意してから開放する。
-※Apps Script側(videoUploadStart_ / videoUploadFinish_)にも同じIDのガードがある。 */
-var VIDEO_ENABLED_ATHLETES = ["a86206408"];
+/* 動画をアップロードしてよいかの判定。
+選手を名指しで限定する方式(VIDEO_ENABLED_ATHLETES)は、保存先がNT専用のDropboxアプリに
+分かれたことで不要になったため廃止した。代わりに「誰としてアプリを開いているか」で決める。
+
+  スタッフ      : 全選手ぶん可(選手を選んでその選手の記録に追加できる)
+  選手(ログイン): 自分のぶんだけ
+  選手(個人リンク): サーバーが絞り込みを返している場合のみ、自分のぶんだけ
+  トークンなし  : 移行中のコーチ用URL。従来どおり可
+
+※これはボタンを出すかどうかの判定にすぎない。実際の可否はApps Script側の
+videoUploadAllowed_ がトークンを見て判定しており、ここだけに頼ってはいない。 */
 function videoUploadEnabled(athleteId) {
-return VIDEO_ENABLED_ATHLETES.indexOf(String(athleteId)) >= 0;
+if (isStaffSession()) return true;
+if (!effectiveToken()) return true;
+if (AUTH && AUTH.athleteId) return String(athleteId) === String(AUTH.athleteId);
+return IS_SCOPED && ATHLETES.length === 1 && String(athleteId) === String(ATHLETES[0].id);
 }
 
 function videoListField(type) {
