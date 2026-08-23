@@ -147,6 +147,33 @@ input[type=range] { accent-color: #4CC3F0; }
 .modal-caption { font-size: 12px; color: #8CA0B8; text-align: center; line-height: 1.5; }
 .modal-close { border: 1px solid #26374E; background: #131F30; color: #EAF1F8; border-radius: 8px; padding: 9px 22px; font-size: 13px; cursor: pointer; }
 
+/* ---- アップロード ---- */
+.add-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; border: none; background: #4CC3F0; color: #062230; cursor: pointer; }
+.add-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.up-overlay { position: fixed; inset: 0; z-index: 95; background: rgba(4,8,14,.9); display: none; align-items: flex-end; justify-content: center; }
+.up-overlay.open { display: flex; }
+.up-sheet { width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; background: #0B1420; border-top: 1px solid #26374E; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.up-head { display: flex; align-items: center; justify-content: space-between; }
+.up-title { font-size: 16px; font-weight: 700; }
+.up-close { border: 1px solid #26374E; background: #131F30; color: #8CA0B8; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+.up-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.up-grid .full { grid-column: 1 / -1; }
+.kind-row { display: flex; gap: 8px; }
+.kind-btn { flex: 1; padding: 11px 0; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid #26374E; background: #1B2C42; color: #8CA0B8; cursor: pointer; }
+.kind-btn.active { background: #4CC3F0; color: #062230; border-color: #4CC3F0; }
+.kind-btn.ref.active { background: #FF9645; color: #23140A; border-color: #FF9645; }
+.kind-hint { font-size: 10px; color: #5C7086; line-height: 1.6; }
+.file-drop { border: 1px dashed #2A5A75; border-radius: 10px; padding: 16px 12px; text-align: center; color: #4CC3F0; font-size: 13px; cursor: pointer; background: #0F2233; }
+.file-picked { font-size: 12px; color: #EAF1F8; word-break: break-all; }
+.rights-note { font-size: 10px; line-height: 1.6; color: #FFB870; background: #2A1F0E; border: 1px solid #6B4A1E; border-radius: 8px; padding: 9px 10px; }
+.up-submit { width: 100%; padding: 13px 0; border-radius: 10px; font-size: 15px; font-weight: 800; border: none; background: #4CC3F0; color: #062230; cursor: pointer; }
+.up-submit:disabled { background: #1B2C42; color: #5C7086; }
+.up-progress { height: 6px; border-radius: 999px; background: #1B2C42; overflow: hidden; }
+.up-progress > div { height: 100%; background: #4CC3F0; width: 0%; transition: width .2s; }
+.up-status { font-size: 11px; color: #8CA0B8; text-align: center; line-height: 1.6; }
+.up-status.err { color: #FF9A9A; }
+.badge.ref-badge { background: #2A1F0E; color: #FFB870; border: 1px solid #6B4A1E; }
+
 .loading-note { text-align: center; color: #5C7086; font-size: 13px; padding: 40px 0; }
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #26374E; border-top-color: #4CC3F0; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
 @keyframes sp { to { transform: rotate(360deg); } }
@@ -162,6 +189,7 @@ input[type=range] { accent-color: #4CC3F0; }
   <div class="app-title" id="ttl">動画ビューア</div>
   <div class="app-sub" id="subttl"></div>
   <div id="notice"></div>
+  <div id="uploadEntry"></div>
   <div id="filterArea"></div>
   <div id="listArea"><div class="loading-note"><span class="spin"></span><span id="loadingTxt">読み込み中…</span></div></div>
 </div>
@@ -264,6 +292,71 @@ input[type=range] { accent-color: #4CC3F0; }
   </div>
 </div>
 
+<div class="up-overlay" id="uploadSheet">
+  <div class="up-sheet">
+    <div class="up-head">
+      <span class="up-title" id="upTitle">動画をアップロード</span>
+      <button class="up-close" id="upClose">閉じる</button>
+    </div>
+
+    <div id="upKindWrap">
+      <label class="field-label" id="upKindLabel">区分</label>
+      <div class="kind-row">
+        <button class="kind-btn active" id="upKindTrain">練習</button>
+        <button class="kind-btn ref" id="upKindRef">参考</button>
+      </div>
+      <div class="kind-hint" id="upKindHint"></div>
+    </div>
+
+    <div class="rights-note" id="upRights"></div>
+
+    <div class="up-grid">
+      <div class="full" id="upAthleteWrap">
+        <label class="field-label" id="upAthleteLabel">選手</label>
+        <select class="select-input" id="upAthlete"></select>
+      </div>
+      <div>
+        <label class="field-label" id="upDateLabel">日付</label>
+        <input type="date" class="date-input" id="upDate">
+      </div>
+      <div>
+        <label class="field-label" id="upTrickLabel">技</label>
+        <select class="select-input" id="upTrick"></select>
+      </div>
+      <div id="upGrabWrap">
+        <label class="field-label" id="upGrabLabel">グラブ</label>
+        <select class="select-input" id="upGrab"></select>
+      </div>
+      <div id="upNearWrap">
+        <label class="field-label" id="upNearLabel">ニア/レギュラー</label>
+        <select class="select-input" id="upNear"></select>
+      </div>
+      <div id="upResultWrap">
+        <label class="field-label" id="upResultLabel">結果</label>
+        <select class="select-input" id="upResult"></select>
+      </div>
+      <div id="upSpeedWrap">
+        <label class="field-label" id="upSpeedLabel">進入スピード</label>
+        <select class="select-input" id="upSpeed"></select>
+      </div>
+      <div class="full" id="upNoteWrap">
+        <label class="field-label" id="upNoteLabel">メモ（見るポイントなど）</label>
+        <input type="text" class="date-input" id="upNote" maxlength="200">
+      </div>
+    </div>
+
+    <div>
+      <input type="file" id="upFile" accept="video/*" style="display:none">
+      <div class="file-drop" id="upFileBtn">＋ 動画ファイルを選ぶ</div>
+      <div class="file-picked" id="upFileName" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="up-progress" id="upProgressWrap" hidden><div id="upProgressBar"></div></div>
+    <div class="up-status" id="upStatus"></div>
+    <button class="up-submit" id="upSubmit" disabled>アップロード</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="playerModal">
   <video id="playerVideo" playsinline muted preload="auto"></video>
   <div class="player-ctrl">
@@ -299,7 +392,12 @@ var CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbwhxPSdRvM67Bf7RO6gDUoZxxvGipDNGs7Up5BXUvbqulr90wjGzhZXtV2VQERyP3rAYw/exec",
   APP_NAME: "NTエアlog",
   HOME_LABEL_JA: "← NTエアlog",
-  HOME_LABEL_EN: "← NT Air Log"
+  HOME_LABEL_EN: "← NT Air Log",
+  /* このアプリのApps Scriptが、区分(kind)や技・グラブなどを Videos シートに保存できるか。
+     NTエアlogは対応済み。MICエアログは古いままで保存する列が無く、Apps Scriptを変更しない
+     方針なので false にしてある。false のときは、保存できない項目を画面に出さない。
+     出したうえで黙って捨てるのが一番たちが悪いため。 */
+  RICH_UPLOAD: true
 };
 try { document.title = "動画ビューア | " + CONFIG.APP_NAME; } catch (e) {}
 
@@ -346,7 +444,20 @@ var TR_EN = {
   "重ね": "Overlay",
   "Bの濃さ": "B opacity",
   "操作対象": "Adjust",
-  "⚠ 撮影角度が違う2本を重ねると、実際には無い差が見えることがあります。同じ向き・近い角度の動画で使ってください。": "⚠ Overlaying videos shot from different angles can show differences that are not real. Use videos filmed from a similar direction and angle."
+  "⚠ 撮影角度が違う2本を重ねると、実際には無い差が見えることがあります。同じ向き・近い角度の動画で使ってください。": "⚠ Overlaying videos shot from different angles can show differences that are not real. Use videos filmed from a similar direction and angle.",
+  "動画を追加": "Add video",
+  "動画をアップロード": "Upload a video",
+  "区分": "Type", "練習": "Training", "参考": "Reference",
+  "参考として保存します。見えるのはこれまでどおり本人とスタッフだけで、他の選手には表示されません。": "Saved as a reference video. As before, only this athlete and the staff can see it — other athletes cannot.",
+  "ふだんの練習動画として保存します。": "Saved as an ordinary training video.",
+  "メモ（見るポイントなど）": "Note (what to look at)",
+  "動画ファイルを選ぶ": "Choose a video file",
+  "アップロード": "Upload",
+  "アップロード中…": "Uploading…",
+  "アップロードしました。一覧を更新しています…": "Uploaded. Refreshing the list…",
+  "動画が大きすぎます（上限500MB）": "This video is too large (500MB max)",
+  "選んでください": "Please choose", "なし": "None",
+  "チームで撮影した映像か、本人・所属先の許可を得た映像だけを上げてください。テレビ放送やSNSの映像を保存しないこと。": "Upload only footage filmed by the team, or footage you have permission to use from the athlete and their organisation. Do not save broadcast or social-media video here."
 };
 function tr(s) { if (LANG === "en" && TR_EN[s]) return TR_EN[s]; return s; }
 function setLang(l) { LANG = l; try { localStorage.setItem("ntairlog_lang", l); } catch (e) {} applyStaticText(); renderAll(); }
@@ -382,6 +493,7 @@ function escHtml(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").r
    絞り込みに使う技・グラブ等は、ファイル名ではなく Videos×Log を entryId/rowId で結合して引く。
    誰の動画が見えるかはサーバ(doGet)がトークンから決める。ここでは絞らない。 */
 var ITEMS = [];        /* 結合済みの表示用モデル */
+var ATHLETE_LIST = [];  /* 名簿(アップロード先の候補) */
 var SCOPED = false;    /* true = 選手モード(自分の分だけ) */
 var LOAD_STATE = "loading"; /* loading | ok | error | blocked */
 var BLOCK_CODE = "";
@@ -411,6 +523,18 @@ function playableUrl(url) {
   return u + (u.indexOf("?") >= 0 ? "&" : "?") + "raw=1";
 }
 
+/* シートの日付は文字列で入れているが、環境によっては Date として返ることがある。
+   どちらで来ても 'YYYY-MM-DD' に揃える。 */
+function fmtYmd(v) {
+  if (!v) return "";
+  var s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  var d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  function p(n) { return (n < 10 ? "0" : "") + n; }
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+
 function joinData(data) {
   var entryById = {};
   (data.records || []).forEach(function (e) { entryById[e.id] = e; });
@@ -423,7 +547,7 @@ function joinData(data) {
     if (entry && v.rowId) {
       for (var i = 0; i < entry.rows.length; i++) { if (String(entry.rows[i].rowId) === String(v.rowId)) { row = entry.rows[i]; break; } }
     }
-    var date = entry ? entry.date : (v.uploadedAt ? String(v.uploadedAt).slice(0, 10) : "");
+    var date = (entry && entry.date) || fmtYmd(v.date) || (v.uploadedAt ? String(v.uploadedAt).slice(0, 10) : "");
     var aid = v.athleteId || (entry ? entry.athlete : "");
     return {
       videoId: v.videoId,
@@ -437,12 +561,17 @@ function joinData(data) {
       date: date,
       facility: entry ? (entry.facility || "") : "",
       kicker: entry ? (entry.kicker || "") : "",
-      trickId: row ? row.trickId : (v.trickId || ""),
-      grabType: row ? (row.grabType || "") : "",
-      near: row ? (row.near || "") : "",
-      result: row ? (row.result || "") : (v.type === "success" || v.type === "fail" ? v.type : ""),
-      speedLevel: row ? (row.speedLevel || "") : "",
-      note: row ? (row.note || "") : ""
+      trickId: (row && row.trickId) || v.trickId || "",
+      /* 記録(Logの行)に紐づく動画は記録側の値を使う。
+         ビューアから直接上げた動画は記録が無いので、動画の行そのものが持っている値を使う。 */
+      grabType: (row && row.grabType) || v.grabType || "",
+      near: (row && row.near) || v.near || "",
+      result: (row && row.result) || v.result || (v.type === "success" || v.type === "fail" ? v.type : ""),
+      speedLevel: (row && row.speedLevel) || v.speedLevel || "",
+      note: (row && row.note) || v.note || "",
+      /* 区分。空欄(この機能より前に上げた動画)は「練習」として扱う。 */
+      kind: String(v.kind || "") === "参考" ? "参考" : "練習",
+      uploadedBy: v.uploadedBy || ""
     };
   });
   return items;
@@ -451,7 +580,26 @@ function joinData(data) {
 function applyData(data) {
   ITEMS = joinData(data);
   SCOPED = data.scoped === true;
+  /* アップロード先の選手候補。動画が0本の選手も選べるように、名簿から作る。 */
+  ATHLETE_LIST = (data.athletes || []).map(function (a) { return { id: a.id, name: a.name }; });
   LOAD_STATE = "ok";
+}
+
+/* 保存系リクエスト。本体(index.html)と同じ形で、必ずトークンを載せる。
+   閲覧だけ絞ってもアップロードが無防備だと他人になりすませてしまうため。 */
+function apiPost(payload) {
+  var body = payload;
+  var tok = effectiveToken();
+  if (tok && !payload.token) {
+    body = {};
+    for (var k in payload) { if (Object.prototype.hasOwnProperty.call(payload, k)) body[k] = payload[k]; }
+    body.token = tok;
+  }
+  return fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(body)
+  }).then(function (res) { return res.json(); });
 }
 
 function fetchData() {
@@ -475,12 +623,13 @@ function fetchWithRetry(attempts, delayMs) {
 }
 
 /* ===== 絞り込み・並べ替え ===== */
-var FILTER = { athlete: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: "new" };
+var FILTER = { athlete: "", kind: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: "new" };
 var FILTER_OPEN = false;
 
 function filteredItems() {
   var out = ITEMS.filter(function (it) {
     if (FILTER.athlete && it.athleteId !== FILTER.athlete) return false;
+    if (FILTER.kind && it.kind !== FILTER.kind) return false;
     if (FILTER.trick && it.trickId !== FILTER.trick) return false;
     if (FILTER.grab && it.grabType !== FILTER.grab) return false;
     if (FILTER.near && it.near !== FILTER.near) return false;
@@ -505,7 +654,7 @@ function uniqueOptions(field) {
   return out;
 }
 function setFilter(k, v) { FILTER[k] = v; if (k === "facility") FILTER.kicker = ""; renderList(); renderFilter(); }
-function resetFilter() { FILTER = { athlete: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: FILTER.sort }; renderList(); renderFilter(); }
+function resetFilter() { FILTER = { athlete: "", kind: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: FILTER.sort }; renderList(); renderFilter(); }
 function toggleFilter() { FILTER_OPEN = !FILTER_OPEN; renderFilter(); }
 
 /* ===== 選択(比較のAとB) ===== */
@@ -531,7 +680,7 @@ function itemTitle(it) {
 function itemShort(it) {
   return (it.date || "") + " " + trickName(it.trickId) + (SCOPED ? "" : " " + (it.athleteName || ""));
 }
-function renderAll() { applyStaticText(); renderNotice(); renderFilter(); renderList(); renderCmpBar(); }
+function renderAll() { applyStaticText(); renderNotice(); renderUploadEntry(); renderFilter(); renderList(); renderCmpBar(); }
 
 function applyStaticText() {
   document.getElementById("ttl").textContent = tr("動画ビューア");
@@ -556,6 +705,22 @@ function applyStaticText() {
     document.getElementById("mirrorBadge" + k).textContent = tr("反転中");
   });
   document.getElementById("playerClose").textContent = tr("閉じる");
+  document.getElementById("upTitle").textContent = tr("動画をアップロード");
+  document.getElementById("upClose").textContent = tr("閉じる");
+  document.getElementById("upKindLabel").textContent = tr("区分");
+  document.getElementById("upKindTrain").textContent = tr("練習");
+  document.getElementById("upKindRef").textContent = tr("参考");
+  document.getElementById("upAthleteLabel").textContent = tr("選手");
+  document.getElementById("upDateLabel").textContent = tr("日付");
+  document.getElementById("upTrickLabel").textContent = tr("技");
+  document.getElementById("upGrabLabel").textContent = tr("グラブ");
+  document.getElementById("upNearLabel").textContent = tr("ニア/レギュラー");
+  document.getElementById("upResultLabel").textContent = tr("結果");
+  document.getElementById("upSpeedLabel").textContent = tr("進入スピード");
+  document.getElementById("upNoteLabel").textContent = tr("メモ（見るポイントなど）");
+  document.getElementById("upFileBtn").textContent = "＋ " + tr("動画ファイルを選ぶ");
+  document.getElementById("upSubmit").textContent = tr("アップロード");
+  document.getElementById("upRights").textContent = tr("チームで撮影した映像か、本人・所属先の許可を得た映像だけを上げてください。テレビ放送やSNSの映像を保存しないこと。");
   document.getElementById("btnLoopA").textContent = tr("A点");
   document.getElementById("btnLoopB").textContent = tr("B点");
   document.getElementById("btnLoopClear").textContent = tr("解除");
@@ -605,6 +770,7 @@ function renderFilter() {
       var seen = {}; ITEMS.forEach(function (it) { if (it[field]) seen[it[field]] = 1; });
       return values.filter(function (o) { return seen[o.v]; });
     }
+    if (CONFIG.RICH_UPLOAD !== false) addField("kind", tr("区分"), present("kind", [{ v: "練習", l: tr("練習") }, { v: "参考", l: tr("参考") }]));
     addField("trick", tr("技"), uniqueOptions("trickId").map(function (id) { return { v: id, l: trickName(id) }; }));
     addField("grab", tr("グラブ"), uniqueOptions("grabType").map(function (id) { return { v: id, l: grabName(id) }; }));
     addField("near", tr("ニア/レギュラー"), present("near", [{ v: "near", l: tr("ニア") }, { v: "regular", l: tr("レギュラー") }]));
@@ -641,13 +807,14 @@ function renderList() {
     var selCls = SEL.a === it.videoId ? " selA" : SEL.b === it.videoId ? " selB" : "";
     var selBadge = SEL.a === it.videoId ? '<span class="badge sel selA-badge">A</span>' : SEL.b === it.videoId ? '<span class="badge sel selB-badge">B</span>' : "";
     var resBadge = it.result ? '<span class="badge ' + escHtml(it.result) + '">' + escHtml(resultName(it.result)) + '</span>' : "";
+    var kindBadge = it.kind === "参考" ? '<span class="badge ref-badge">' + escHtml(tr("参考")) + '</span>' : "";
     var sub = [];
     if (it.facility) sub.push(it.facility + (it.kicker ? " · " + it.kicker : ""));
     if (it.speedLevel) sub.push(speedName(it.speedLevel));
     html += '<div class="video-card' + selCls + '">' +
       '<div class="vc-top"><span class="vc-date">' + escHtml(it.date || "") + '</span>' +
       (!SCOPED ? '<span class="vc-athlete">' + escHtml(it.athleteName || "") + '</span>' : "") +
-      resBadge + selBadge + '</div>' +
+      kindBadge + resBadge + selBadge + '</div>' +
       '<div class="vc-main">' + escHtml(itemTitle(it)) + '</div>' +
       (sub.length ? '<div class="vc-sub">' + escHtml(sub.join(" ｜ ")) + '</div>' : "") +
       (it.note ? '<div class="vc-note">' + escHtml(it.note) + '</div>' : "") +
@@ -675,6 +842,203 @@ function renderCmpBar() {
   slotB.className = "cmp-slot" + (ib ? " filled-b" : "");
   document.getElementById("btnGoCompare").disabled = !(ia && ib);
   document.getElementById("btnGoCompare").textContent = tr("比較");
+}
+
+/* ===== アップロード =====
+   ビューアから直接動画を上げる。記録(Logの行)には紐づけない。
+   紐づけると、練習していない参考動画まで記録として残り、成功率や本数の集計が狂うため。
+   技・日付などは動画の行そのものに持たせる(Videosシートの後から足した列)。
+
+   誰の動画として上げられるかはサーバー(videoUploadAllowed_ / checkPostAuth_)が決める。
+   ここでの判定は、出しても押せないボタンを見せないためのもの。 */
+var VIDEO_CHUNK_SIZE = 4 * 1024 * 1024;
+var VIDEO_MAX_SIZE = 500 * 1024 * 1024;
+
+var UP = { kind: "練習", file: null, busy: false };
+
+/* アップロード先に選べる選手。選手本人は自分だけ、スタッフとコーチ用URLは全員。 */
+function ATHLETES_FOR_UPLOAD() {
+  if (isStaffSession() || !effectiveToken()) return ATHLETE_LIST;
+  if (AUTH && AUTH.athleteId) return ATHLETE_LIST.filter(function (a) { return String(a.id) === String(AUTH.athleteId); });
+  if (SCOPED && ATHLETE_LIST.length === 1) return ATHLETE_LIST;
+  return [];
+}
+function uploaderName() {
+  if (AUTH && AUTH.displayName) return AUTH.displayName;
+  var list = ATHLETES_FOR_UPLOAD();
+  return (SCOPED && list.length === 1) ? list[0].name : "";
+}
+
+function todayYmd() {
+  var d = new Date();
+  function p(n) { return (n < 10 ? "0" : "") + n; }
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+
+function renderUploadEntry() {
+  var el = document.getElementById("uploadEntry");
+  if (!el) return;
+  var list = ATHLETES_FOR_UPLOAD();
+  if (LOAD_STATE !== "ok" || !list.length) { el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="add-row"><button class="add-btn" onclick="openUpload()">＋ ' + escHtml(tr("動画を追加")) + '</button></div>';
+}
+
+function fillSelect(id, options, selected) {
+  var el = document.getElementById(id);
+  el.innerHTML = options.map(function (o) {
+    return '<option value="' + escHtml(o.v) + '"' + (o.v === selected ? " selected" : "") + '>' + escHtml(o.l) + '</option>';
+  }).join("");
+}
+
+function openUpload() {
+  var list = ATHLETES_FOR_UPLOAD();
+  if (!list.length) return;
+  UP = { kind: "練習", file: null, busy: false };
+
+  fillSelect("upAthlete", list.map(function (a) { return { v: a.id, l: a.name }; }), list[0].id);
+  document.getElementById("upAthleteWrap").style.display = list.length > 1 ? "" : "none";
+  document.getElementById("upDate").value = todayYmd();
+
+  var tricks = [{ v: "", l: tr("選んでください") }];
+  Object.keys(TRICK_LABELS).forEach(function (id) { tricks.push({ v: id, l: TRICK_LABELS[id] }); });
+  fillSelect("upTrick", tricks, "");
+
+  var grabs = [{ v: "", l: tr("なし") }];
+  Object.keys(GRAB_LABELS).forEach(function (id) { grabs.push({ v: id, l: GRAB_LABELS[id] }); });
+  fillSelect("upGrab", grabs, "");
+
+  fillSelect("upNear", [{ v: "", l: tr("なし") }, { v: "near", l: tr("ニア") }, { v: "regular", l: tr("レギュラー") }], "");
+  fillSelect("upResult", [{ v: "", l: tr("なし") }, { v: "success", l: tr("成功") }, { v: "fail", l: tr("失敗") }, { v: "yure", l: tr("ヨレ") }], "");
+  fillSelect("upSpeed", [{ v: "", l: tr("なし") }, { v: "slow", l: tr("ゆっくり") }, { v: "normal", l: tr("普通") }, { v: "fast", l: tr("速い") }], "");
+  document.getElementById("upNote").value = "";
+  document.getElementById("upFile").value = "";
+  document.getElementById("upFileName").textContent = "";
+  document.getElementById("upStatus").textContent = "";
+  document.getElementById("upStatus").className = "up-status";
+  document.getElementById("upProgressWrap").hidden = true;
+  document.getElementById("upProgressBar").style.width = "0%";
+
+  setUploadKind("練習");
+  /* Apps Scriptが保存できない項目は出さない(MICエアログ) */
+  var rich = CONFIG.RICH_UPLOAD !== false;
+  ["upKindWrap", "upGrabWrap", "upNearWrap", "upResultWrap", "upSpeedWrap", "upNoteWrap"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = rich ? "" : "none";
+  });
+  document.getElementById("upRights").style.display = rich ? "" : "none";
+  updateUploadSubmit();
+  document.getElementById("uploadSheet").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeUpload() {
+  if (UP.busy) return;
+  document.getElementById("uploadSheet").classList.remove("open");
+  document.body.style.overflow = "";
+}
+function setUploadKind(k) {
+  UP.kind = k;
+  document.getElementById("upKindTrain").className = "kind-btn" + (k === "練習" ? " active" : "");
+  document.getElementById("upKindRef").className = "kind-btn ref" + (k === "参考" ? " active" : "");
+  document.getElementById("upKindHint").textContent = k === "参考"
+    ? tr("参考として保存します。見えるのはこれまでどおり本人とスタッフだけで、他の選手には表示されません。")
+    : tr("ふだんの練習動画として保存します。");
+}
+function updateUploadSubmit() {
+  document.getElementById("upSubmit").disabled = UP.busy || !UP.file;
+}
+function setUploadStatus(msg, isErr) {
+  var el = document.getElementById("upStatus");
+  el.textContent = msg || "";
+  el.className = "up-status" + (isErr ? " err" : "");
+}
+
+function readFileSlice(file, start, end) {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () { resolve(String(reader.result || "").split(",")[1] || ""); };
+    reader.onerror = function () { reject(reader.error); };
+    reader.readAsDataURL(file.slice(start, end));
+  });
+}
+
+/* 記録アプリ本体と同じ手順(開始 → 4MBずつ送信 → 完了)。
+   完了のときだけ、区分や技などを一緒に送る。 */
+function doUpload() {
+  if (UP.busy || !UP.file) return;
+  var file = UP.file;
+  if (file.size > VIDEO_MAX_SIZE) {
+    setUploadStatus(tr("動画が大きすぎます（上限500MB）"), true);
+    return;
+  }
+  var athleteId = document.getElementById("upAthlete").value;
+  var athlete = ATHLETE_LIST.filter(function (a) { return String(a.id) === String(athleteId); })[0];
+  var meta = {
+    athleteId: athleteId,
+    athleteName: athlete ? athlete.name : "",
+    kind: UP.kind,
+    date: document.getElementById("upDate").value || todayYmd(),
+    trickId: document.getElementById("upTrick").value,
+    trickLabel: trickName(document.getElementById("upTrick").value),
+    grabType: document.getElementById("upGrab").value,
+    near: document.getElementById("upNear").value,
+    result: document.getElementById("upResult").value,
+    speedLevel: document.getElementById("upSpeed").value,
+    note: document.getElementById("upNote").value,
+    uploadedBy: uploaderName(),
+    fileName: file.name || "video.mp4"
+  };
+  if (CONFIG.RICH_UPLOAD === false) {
+    /* 保存先の列が無いアプリでは送らない。送っても捨てられるだけで、
+       ファイル名だけが意図せず変わってしまう。 */
+    ["kind", "grabType", "near", "result", "speedLevel", "note", "uploadedBy"].forEach(function (k) { delete meta[k]; });
+  }
+
+  UP.busy = true;
+  updateUploadSubmit();
+  document.getElementById("upProgressWrap").hidden = false;
+  setUploadStatus(tr("アップロード中…"));
+
+  var sessionId = null, offset = 0;
+  function progress(p) { document.getElementById("upProgressBar").style.width = Math.max(0, Math.min(100, p)) + "%"; }
+
+  function sendNext(index) {
+    var start = index * VIDEO_CHUNK_SIZE;
+    var end = Math.min(start + VIDEO_CHUNK_SIZE, file.size);
+    var isLast = end >= file.size;
+    return readFileSlice(file, start, end).then(function (b64) {
+      if (isLast) {
+        var payload = { type: "videoUploadFinish", sessionId: sessionId, offset: offset, chunkBase64: b64, videoType: "single", entryId: "", rowId: "" };
+        for (var k in meta) { if (Object.prototype.hasOwnProperty.call(meta, k)) payload[k] = meta[k]; }
+        return apiPost(payload).then(function (res) {
+          if (!res || res.status !== "ok") throw new Error((res && res.message) || "finish failed");
+          progress(100);
+          return res;
+        });
+      }
+      return apiPost({ type: "videoUploadChunk", sessionId: sessionId, offset: offset, chunkBase64: b64 }).then(function (res) {
+        if (!res || res.status !== "ok") throw new Error((res && res.message) || "chunk failed");
+        offset += end - start;
+        progress(Math.min(95, Math.round(offset / file.size * 100)));
+        return sendNext(index + 1);
+      });
+    });
+  }
+
+  apiPost({ type: "videoUploadStart", athleteId: athleteId }).then(function (res) {
+    if (!res || res.status !== "ok" || !res.sessionId) throw new Error((res && res.message) || "start failed");
+    sessionId = res.sessionId;
+    return sendNext(0);
+  }).then(function () {
+    setUploadStatus(tr("アップロードしました。一覧を更新しています…"));
+    return fetchData();
+  }).then(function () {
+    UP.busy = false;
+    closeUpload();
+  }).catch(function (err) {
+    UP.busy = false;
+    updateUploadSubmit();
+    setUploadStatus(String((err && err.message) || err).slice(0, 120), true);
+  });
 }
 
 /* ===== 単体再生 =====
@@ -1126,6 +1490,18 @@ document.getElementById("btnLoopClear").addEventListener("click", clearLoop);
   seek.addEventListener("change", function () { seek.__dragging = false; indivSeek(k, seek.value); });
   setupGestures(k);
 });
+document.getElementById("upClose").addEventListener("click", closeUpload);
+document.getElementById("uploadSheet").addEventListener("click", function (e) { if (e.target === this) closeUpload(); });
+document.getElementById("upKindTrain").addEventListener("click", function () { setUploadKind("練習"); });
+document.getElementById("upKindRef").addEventListener("click", function () { setUploadKind("参考"); });
+document.getElementById("upFileBtn").addEventListener("click", function () { document.getElementById("upFile").click(); });
+document.getElementById("upFile").addEventListener("change", function () {
+  UP.file = this.files && this.files[0] ? this.files[0] : null;
+  document.getElementById("upFileName").textContent = UP.file ? (UP.file.name + "（" + Math.round(UP.file.size / 1024 / 1024 * 10) / 10 + "MB）") : "";
+  setUploadStatus("");
+  updateUploadSubmit();
+});
+document.getElementById("upSubmit").addEventListener("click", doUpload);
 document.getElementById("playerClose").addEventListener("click", closePlayer);
 document.getElementById("playerModal").addEventListener("click", function (e) { if (e.target === this) closePlayer(); });
 document.getElementById("playerPlay").addEventListener("click", playerTogglePlay);
