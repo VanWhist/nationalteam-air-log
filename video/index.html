@@ -925,7 +925,7 @@ function openUpload() {
     var el = document.getElementById(id);
     if (el) el.style.display = rich ? "" : "none";
   });
-  document.getElementById("upRights").style.display = rich ? "" : "none";
+  /* 権利の注意書きは保存できる項目とは関係がないので、どのアプリでも必ず出す。 */
   updateUploadSubmit();
   document.getElementById("uploadSheet").classList.add("open");
   document.body.style.overflow = "hidden";
