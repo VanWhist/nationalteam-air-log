@@ -10,6 +10,10 @@
    認証・データ取得は本体と同じ仕組み(localStorageのAUTH / ?token= / doGet)を使う。 */
 html, body { margin: 0; padding: 0; background: #0B1420; min-height: 100%; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* コマ送りなどを速く連続でタップしたときに、iOSがダブルタップと解釈して画面を拡大するのを止める。
+   manipulation は「ダブルタップ拡大だけ」を無効にするので、ピンチでの拡大は今までどおりできる。 */
+html, body { touch-action: manipulation; }
+button, .file-drop, .add-btn { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 input, select, button { font-family: inherit; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; color: #EAF1F8; }
 .shell { max-width: 480px; margin: 0 auto; padding: 16px 16px calc(90px + env(safe-area-inset-bottom, 0px)); }
@@ -162,6 +166,7 @@ input[type=range] { accent-color: #4CC3F0; }
 .kind-btn { flex: 1; padding: 11px 0; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid #26374E; background: #1B2C42; color: #8CA0B8; cursor: pointer; }
 .kind-btn.active { background: #4CC3F0; color: #062230; border-color: #4CC3F0; }
 .kind-btn.ref.active { background: #FF9645; color: #23140A; border-color: #FF9645; }
+.kind-btn.snow.active { background: #DCEBFA; color: #17304A; border-color: #DCEBFA; }
 .kind-hint { font-size: 10px; color: #5C7086; line-height: 1.6; }
 .file-drop { border: 1px dashed #2A5A75; border-radius: 10px; padding: 16px 12px; text-align: center; color: #4CC3F0; font-size: 13px; cursor: pointer; background: #0F2233; }
 .file-picked { font-size: 12px; color: #EAF1F8; word-break: break-all; }
@@ -173,6 +178,7 @@ input[type=range] { accent-color: #4CC3F0; }
 .up-status { font-size: 11px; color: #8CA0B8; text-align: center; line-height: 1.6; }
 .up-status.err { color: #FF9A9A; }
 .badge.ref-badge { background: #2A1F0E; color: #FFB870; border: 1px solid #6B4A1E; }
+.badge.snow-badge { background: #DCEBFA; color: #17304A; }
 
 .loading-note { text-align: center; color: #5C7086; font-size: 13px; padding: 40px 0; }
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #26374E; border-top-color: #4CC3F0; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
@@ -297,6 +303,14 @@ input[type=range] { accent-color: #4CC3F0; }
     <div class="up-head">
       <span class="up-title" id="upTitle">動画をアップロード</span>
       <button class="up-close" id="upClose">閉じる</button>
+    </div>
+
+    <div id="upPlaceWrap">
+      <label class="field-label" id="upPlaceLabel">場所</label>
+      <div class="kind-row">
+        <button class="kind-btn active" id="upPlaceWater">水上</button>
+        <button class="kind-btn snow" id="upPlaceSnow">雪上</button>
+      </div>
     </div>
 
     <div id="upKindWrap">
@@ -448,6 +462,7 @@ var TR_EN = {
   "動画を追加": "Add video",
   "動画をアップロード": "Upload a video",
   "区分": "Type", "練習": "Training", "参考": "Reference",
+  "場所": "Where", "水上": "Water ramp", "雪上": "Snow",
   "参考として保存します。見えるのはこれまでどおり本人とスタッフだけで、他の選手には表示されません。": "Saved as a reference video. As before, only this athlete and the staff can see it — other athletes cannot.",
   "ふだんの練習動画として保存します。": "Saved as an ordinary training video.",
   "メモ（見るポイントなど）": "Note (what to look at)",
@@ -467,6 +482,7 @@ var TRICK_LABELS = {
   straight_jump: "ストレートジャンプ",
   rot_3: "360", rot_7: "720", rot_10: "1080",
   oax_3: "オフアクシス360", oax_7: "オフアクシス720", oax_10: "オフアクシス1080", oax_14: "オフアクシス1440",
+  oax_18: "オフアクシス1800",
   inv_bc: "バックフリップ", inv_bt: "バックタック", inv_bp: "バックパイク", inv_bl: "バックレイアウト",
   inv_bf: "バックフル", inv_bdf: "バックダブルフル", inv_btf: "バックトリプルフル",
   inv_fc: "フロントフリップ", inv_ft: "フロントタック", inv_fp: "フロントパイク", inv_ff: "フロントフル",
@@ -571,6 +587,8 @@ function joinData(data) {
       note: (row && row.note) || v.note || "",
       /* 区分。空欄(この機能より前に上げた動画)は「練習」として扱う。 */
       kind: String(v.kind || "") === "参考" ? "参考" : "練習",
+      /* 場所。空欄(この機能より前に上げた動画)は「水上」として扱う。 */
+      place: String(v.place || "") === "雪上" ? "雪上" : "水上",
       uploadedBy: v.uploadedBy || ""
     };
   });
@@ -623,12 +641,13 @@ function fetchWithRetry(attempts, delayMs) {
 }
 
 /* ===== 絞り込み・並べ替え ===== */
-var FILTER = { athlete: "", kind: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: "new" };
+var FILTER = { athlete: "", place: "", kind: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: "new" };
 var FILTER_OPEN = false;
 
 function filteredItems() {
   var out = ITEMS.filter(function (it) {
     if (FILTER.athlete && it.athleteId !== FILTER.athlete) return false;
+    if (FILTER.place && it.place !== FILTER.place) return false;
     if (FILTER.kind && it.kind !== FILTER.kind) return false;
     if (FILTER.trick && it.trickId !== FILTER.trick) return false;
     if (FILTER.grab && it.grabType !== FILTER.grab) return false;
@@ -654,7 +673,7 @@ function uniqueOptions(field) {
   return out;
 }
 function setFilter(k, v) { FILTER[k] = v; if (k === "facility") FILTER.kicker = ""; renderList(); renderFilter(); }
-function resetFilter() { FILTER = { athlete: "", kind: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: FILTER.sort }; renderList(); renderFilter(); }
+function resetFilter() { FILTER = { athlete: "", place: "", kind: "", trick: "", grab: "", near: "", result: "", speed: "", facility: "", kicker: "", dateFrom: "", dateTo: "", sort: FILTER.sort }; renderList(); renderFilter(); }
 function toggleFilter() { FILTER_OPEN = !FILTER_OPEN; renderFilter(); }
 
 /* ===== 選択(比較のAとB) ===== */
@@ -708,6 +727,9 @@ function applyStaticText() {
   document.getElementById("upTitle").textContent = tr("動画をアップロード");
   document.getElementById("upClose").textContent = tr("閉じる");
   document.getElementById("upKindLabel").textContent = tr("区分");
+  document.getElementById("upPlaceLabel").textContent = tr("場所");
+  document.getElementById("upPlaceWater").textContent = tr("水上");
+  document.getElementById("upPlaceSnow").textContent = tr("雪上");
   document.getElementById("upKindTrain").textContent = tr("練習");
   document.getElementById("upKindRef").textContent = tr("参考");
   document.getElementById("upAthleteLabel").textContent = tr("選手");
@@ -770,6 +792,9 @@ function renderFilter() {
       var seen = {}; ITEMS.forEach(function (it) { if (it[field]) seen[it[field]] = 1; });
       return values.filter(function (o) { return seen[o.v]; });
     }
+    /* 場所は雪上の動画が1本でもあるときだけ出す。水上しか無いうちは選ぶ意味がないため。 */
+    var placeOpts = present("place", [{ v: "水上", l: tr("水上") }, { v: "雪上", l: tr("雪上") }]);
+    if (CONFIG.RICH_UPLOAD !== false && placeOpts.length > 1) addField("place", tr("場所"), placeOpts);
     if (CONFIG.RICH_UPLOAD !== false) addField("kind", tr("区分"), present("kind", [{ v: "練習", l: tr("練習") }, { v: "参考", l: tr("参考") }]));
     addField("trick", tr("技"), uniqueOptions("trickId").map(function (id) { return { v: id, l: trickName(id) }; }));
     addField("grab", tr("グラブ"), uniqueOptions("grabType").map(function (id) { return { v: id, l: grabName(id) }; }));
@@ -808,13 +833,14 @@ function renderList() {
     var selBadge = SEL.a === it.videoId ? '<span class="badge sel selA-badge">A</span>' : SEL.b === it.videoId ? '<span class="badge sel selB-badge">B</span>' : "";
     var resBadge = it.result ? '<span class="badge ' + escHtml(it.result) + '">' + escHtml(resultName(it.result)) + '</span>' : "";
     var kindBadge = it.kind === "参考" ? '<span class="badge ref-badge">' + escHtml(tr("参考")) + '</span>' : "";
+    var placeBadge = it.place === "雪上" ? '<span class="badge snow-badge">' + escHtml(tr("雪上")) + '</span>' : "";
     var sub = [];
     if (it.facility) sub.push(it.facility + (it.kicker ? " · " + it.kicker : ""));
     if (it.speedLevel) sub.push(speedName(it.speedLevel));
     html += '<div class="video-card' + selCls + '">' +
       '<div class="vc-top"><span class="vc-date">' + escHtml(it.date || "") + '</span>' +
       (!SCOPED ? '<span class="vc-athlete">' + escHtml(it.athleteName || "") + '</span>' : "") +
-      kindBadge + resBadge + selBadge + '</div>' +
+      placeBadge + kindBadge + resBadge + selBadge + '</div>' +
       '<div class="vc-main">' + escHtml(itemTitle(it)) + '</div>' +
       (sub.length ? '<div class="vc-sub">' + escHtml(sub.join(" ｜ ")) + '</div>' : "") +
       (it.note ? '<div class="vc-note">' + escHtml(it.note) + '</div>' : "") +
@@ -854,7 +880,7 @@ function renderCmpBar() {
 var VIDEO_CHUNK_SIZE = 4 * 1024 * 1024;
 var VIDEO_MAX_SIZE = 500 * 1024 * 1024;
 
-var UP = { kind: "練習", file: null, busy: false };
+var UP = { place: "水上", kind: "練習", file: null, busy: false };
 
 /* アップロード先に選べる選手。選手本人は自分だけ、スタッフとコーチ用URLは全員。 */
 function ATHLETES_FOR_UPLOAD() {
@@ -893,7 +919,7 @@ function fillSelect(id, options, selected) {
 function openUpload() {
   var list = ATHLETES_FOR_UPLOAD();
   if (!list.length) return;
-  UP = { kind: "練習", file: null, busy: false };
+  UP = { place: "水上", kind: "練習", file: null, busy: false };
 
   fillSelect("upAthlete", list.map(function (a) { return { v: a.id, l: a.name }; }), list[0].id);
   document.getElementById("upAthleteWrap").style.display = list.length > 1 ? "" : "none";
@@ -918,10 +944,11 @@ function openUpload() {
   document.getElementById("upProgressWrap").hidden = true;
   document.getElementById("upProgressBar").style.width = "0%";
 
+  setUploadPlace("水上");
   setUploadKind("練習");
   /* Apps Scriptが保存できない項目は出さない(MICエアログ) */
   var rich = CONFIG.RICH_UPLOAD !== false;
-  ["upKindWrap", "upGrabWrap", "upNearWrap", "upResultWrap", "upSpeedWrap", "upNoteWrap"].forEach(function (id) {
+  ["upPlaceWrap", "upKindWrap", "upGrabWrap", "upNearWrap", "upResultWrap", "upSpeedWrap", "upNoteWrap"].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.style.display = rich ? "" : "none";
   });
@@ -934,6 +961,11 @@ function closeUpload() {
   if (UP.busy) return;
   document.getElementById("uploadSheet").classList.remove("open");
   document.body.style.overflow = "";
+}
+function setUploadPlace(p) {
+  UP.place = p;
+  document.getElementById("upPlaceWater").className = "kind-btn" + (p === "水上" ? " active" : "");
+  document.getElementById("upPlaceSnow").className = "kind-btn snow" + (p === "雪上" ? " active" : "");
 }
 function setUploadKind(k) {
   UP.kind = k;
@@ -975,6 +1007,7 @@ function doUpload() {
   var meta = {
     athleteId: athleteId,
     athleteName: athlete ? athlete.name : "",
+    place: UP.place,
     kind: UP.kind,
     date: document.getElementById("upDate").value || todayYmd(),
     trickId: document.getElementById("upTrick").value,
@@ -990,7 +1023,7 @@ function doUpload() {
   if (CONFIG.RICH_UPLOAD === false) {
     /* 保存先の列が無いアプリでは送らない。送っても捨てられるだけで、
        ファイル名だけが意図せず変わってしまう。 */
-    ["kind", "grabType", "near", "result", "speedLevel", "note", "uploadedBy"].forEach(function (k) { delete meta[k]; });
+    ["place", "kind", "grabType", "near", "result", "speedLevel", "note", "uploadedBy"].forEach(function (k) { delete meta[k]; });
   }
 
   UP.busy = true;
@@ -1492,6 +1525,8 @@ document.getElementById("btnLoopClear").addEventListener("click", clearLoop);
 });
 document.getElementById("upClose").addEventListener("click", closeUpload);
 document.getElementById("uploadSheet").addEventListener("click", function (e) { if (e.target === this) closeUpload(); });
+document.getElementById("upPlaceWater").addEventListener("click", function () { setUploadPlace("水上"); });
+document.getElementById("upPlaceSnow").addEventListener("click", function () { setUploadPlace("雪上"); });
 document.getElementById("upKindTrain").addEventListener("click", function () { setUploadKind("練習"); });
 document.getElementById("upKindRef").addEventListener("click", function () { setUploadKind("参考"); });
 document.getElementById("upFileBtn").addEventListener("click", function () { document.getElementById("upFile").click(); });
