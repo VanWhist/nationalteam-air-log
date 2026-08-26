@@ -229,6 +229,22 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .av-num .av-muted { color: #5C7086; }
 .analyze-divider { height: 1px; background: #26374E; margin-top: 14px; }
 .analyze-empty { font-size: 10.5px; color: #5C7086; padding: 6px 0; }
+/* 練習量マップ（グラブ×スピード）。表そのものが絞り込みボタンになる。 */
+.pmap { border-collapse: separate; border-spacing: 3px; width: 100%; margin-top: 2px; }
+.pmap th { font-size: 9.5px; color: #5C7086; font-weight: 600; padding: 2px 0; text-align: center; }
+.pmap th.rh { text-align: left; font-size: 10.5px; color: #EAF1F8; font-weight: 400; width: 104px; padding-right: 4px; line-height: 1.2; }
+.pmap td { text-align: center; border-radius: 7px; padding: 7px 2px; font-size: 10.5px; line-height: 1.25;
+  font-family: ui-monospace, monospace; background: #16243A; border: 1px solid #26374E; color: #EAF1F8; cursor: pointer; }
+.pmap td .pmap-rec { display: block; font-size: 8.5px; color: #7A8CA0; }
+.pmap td.pmap-none { background: #101A28; border-style: dashed; cursor: default; }
+.pmap td.pmap-none span { color: #4A5C72; font-size: 11px; }
+.pmap td.pmap-few .pmap-rec { color: #FFB870; }
+.pmap td.pmap-sel { background: #12405C; border-color: #4CC3F0; }
+.pmap-legend { display: flex; gap: 11px; flex-wrap: wrap; font-size: 9px; color: #5C7086; margin-top: 7px; }
+.analyze-pill-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 8px; flex-wrap: wrap; }
+.analyze-pill { display: inline-flex; align-items: center; gap: 6px; background: #12405C; border: 1px solid #4CC3F0;
+  color: #9BDCF7; border-radius: 999px; padding: 5px 11px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.analyze-pill .analyze-pill-x { color: #6FA9C4; font-size: 12px; }
 
 .yure-panel { background: #131F30; border: 1px solid #7a4a1f; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .yure-list-item { background: #1B2C42; border: 1px solid #26374E; border-radius: 8px; padding: 10px; cursor: pointer; }
@@ -496,6 +512,23 @@ var EN = {
 "深め(3〜5)": "Large (3–5)",
 "この技には、結果が「ヨレ」の記録がまだありません。": "No records with a \u201cwobble\u201d result for this trick yet.",
 "この期間の記録がありません。": "No records in this period.",
+
+/* ---- 練習量マップ ---- */
+"練習量マップ（グラブ × 進入スピード）": "Practice map (grab \u00d7 approach speed)",
+"上段＝本数、下段＝記録数。「—」はまだ記録がない条件です。": "Top = reps, bottom = records. \u201c\u2014\u201d means no records for that condition yet.",
+"マスをタップすると、その条件だけに絞った内訳が下に出ます。": "Tap a cell to filter the breakdown below to that condition.",
+"数字＝本数／記録数": "Numbers = reps / records",
+"琥珀の記録数＝{n}本未満（データ少）": "Amber record count = under {n} reps (thin data)",
+"—＝まだやっていない条件": "\u2014 = not tried yet",
+"{n}記録": "{n} rec",
+"結果の内訳": "Result breakdown",
+"この条件": "This condition",
+"技の全体": "Whole trick",
+"同じ技の全体と並べているので、この条件が得意か苦手かがその場で分かります。": "Shown next to the trick as a whole, so you can tell at a glance whether this condition is strong or weak.",
+"{c}本 ・ {r}記録 ・ {d}日間": "{c} reps \u00b7 {r} records \u00b7 {d} days",
+"この技は記録がある条件が1つだけなので、練習量マップは表示していません。": "Only one condition has records for this trick, so the practice map is not shown.",
+"この条件には、結果が「ヨレ」の記録がありません。": "No records with a \u201cwobble\u201d result for this condition.",
+"絞り込みを解除": "Clear filter",
 " ・評価なし {n}件": " · unrated {n}",
 "直近の記録": "Recent records",
 "内訳": "Detail",
@@ -631,6 +664,8 @@ LANG = lang;
 /* 技別分析シートは表示言語の技名をキーにしているため、言語を切り替えたら閉じる。
    開いたまま切り替えるとキーが一致せず、中身が空のシートになってしまう。 */
 S.dashAnalyzeTrick = null;
+S.dashAnalyzeGrab = null;
+S.dashAnalyzeSpeed = null;
 try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch (e) {}
 document.documentElement.lang = lang;
 /* ログイン系の画面では、その画面を描き直す。ここでrenderLoading()に落ちると、
@@ -1448,6 +1483,8 @@ var S = {
 dashRecentExpanded: false,
 dashChipsExpanded: {},dashGroupOpen: {},dashRankOpen: {},dashFacRankOpen: {},
 dashAnalyzeTrick: null,
+dashAnalyzeGrab: null,
+dashAnalyzeSpeed: null,
 dashNoteOpen: {},dashRowNoteOpen: {},refreshing: false,
 refreshError: "",
 
@@ -2104,6 +2141,20 @@ function grabVariantCat(r) {
 if ((r.grabType || "") !== "") return "grab";
 return r.modifier === "position" ? "position" : "none";
 }
+/* グラブ・ポジションの組み合わせを表すキー。練習量マップの行キーにも使う。 */
+function grabVariantKeyOf(r) {
+var cat = grabVariantCat(r);
+return cat + "|" + (cat === "grab" ? r.grabType : "") + "|" + (cat === "grab" ? (r.near || "") : "");
+}
+function grabVariantLabelFromKey(key) {
+var p = String(key).split("|");
+if (p[0] === "none") return tr("グラブなし");
+if (p[0] === "position") return tr("ポジション");
+var g = GRAB_INDEX[p[1]];
+var name = g ? tr(g.label) : tr("その他/不明瞭");
+var nearLabel = p[2] === "near" ? tr("・ニア") : (p[2] === "regular" ? tr("・レギュラー") : tr("・（未選択）"));
+return name + nearLabel;
+}
 function grabVariantTotals(entries, trickKey) {
 var order = [], map = {};
 entries.forEach(function (e) {
@@ -2112,8 +2163,8 @@ if (trickKeyOf(r) !== trickKey) return;
 var cat = grabVariantCat(r);
 var gid = cat === "grab" ? r.grabType : "";
 var near = cat === "grab" ? (r.near || "") : "";
-var key = cat + "|" + gid + "|" + near;
-if (!map[key]) { map[key] = { cat: cat, grabType: gid, near: near, count: 0, rows: 0, success: 0, fail: 0, yure: 0 }; order.push(key); }
+var key = grabVariantKeyOf(r);
+if (!map[key]) { map[key] = { key: key, cat: cat, grabType: gid, near: near, count: 0, rows: 0, success: 0, fail: 0, yure: 0 }; order.push(key); }
 var m = map[key], sv = rowSuccess(r);
 m.rows += 1;
 m.count += rowTotal(r);
@@ -2132,29 +2183,6 @@ var name = g ? tr(g.label) : tr("その他/不明瞭");
 var nearLabel = v.near === "near" ? tr("・ニア") : (v.near === "regular" ? tr("・レギュラー") : tr("・（未選択）"));
 return name + nearLabel;
 }
-/* ヨレのタグ別。count は「そのタグが付いた記録の数」＝回数であり、本数(reps)ではない。 */
-function wobbleTagTotals(entries, trickKey) {
-var map = {};
-WOBBLE_TAGS.forEach(function (t) { map[t] = { tag: t, count: 0, low: 0, high: 0, unknown: 0 }; });
-entries.forEach(function (e) {
-e.rows.forEach(function (r) {
-if (trickKeyOf(r) !== trickKey) return;
-if (r.result !== "yure") return; /* 結果が「ヨレ」の記録だけを数える(コーチ確認済み) */
-(r.wobbleDetail || []).forEach(function (w) {
-var m = map[w.tag];
-if (!m) return;
-m.count += 1;
-var sev = Number(w.severity) || 0;
-if (sev >= 3) m.high += 1;
-else if (sev >= 1) m.low += 1;
-else m.unknown += 1;
-});
-});
-});
-return WOBBLE_TAGS.map(function (t) { return map[t]; })
-.filter(function (m) { return m.count > 0; })
-.sort(function (a, b) { return b.count - a.count; });
-}
 /* 分析シートの見出し1行用。既存の rankCountLabel と同じ数え方。 */
 function trickHeadTotals(entries, trickKey) {
 var o = { count: 0, success: 0, fail: 0, yure: 0 };
@@ -2170,8 +2198,120 @@ o.yure += rowYure(r);
 });
 return o;
 }
-function openTrickAnalyze(key) { S.dashAnalyzeTrick = decodeURIComponent(key); render(); }
-function closeTrickAnalyze() { S.dashAnalyzeTrick = null; render(); }
+/* =========================================================
+   練習量マップ（第2弾・岳穂コーチ承認 2026-08-22）
+   ・グラブ × 進入スピードの本数表。表そのものが絞り込みボタンになる。
+   ・マスの中身は本数と記録数だけ。率は出さない。空欄＝まだやっていない条件。
+   ・少ないデータは消さず、記録数を琥珀色にして「データ少」と分かるようにする
+     （「あと○本で表示」は不採用。5本で信頼できるという境目は存在しないため）。
+   ========================================================= */
+var ANALYZE_FEW_REPS = 5; /* 本数がこれ未満なら「データ少」表示 */
+
+/* 練習量マップの見出しと絞り込みピルで使う短いスピード名（speedLevelLabel は補足付きで長い）。 */
+function speedShortLabel(key) {
+var lv = SPEED_LEVELS.filter(function (x) { return x.key === key; })[0];
+return lv ? tr(lv.label) : key;
+}
+function practiceMap(entries, trickKey) {
+var cells = {}, gorder = [], gtotal = {};
+entries.forEach(function (e) {
+e.rows.forEach(function (r) {
+if (trickKeyOf(r) !== trickKey) return;
+var gk = grabVariantKeyOf(r), sp = r.speedLevel || "normal", k = gk + "@" + sp;
+if (gtotal[gk] === undefined) { gtotal[gk] = 0; gorder.push(gk); }
+if (!cells[k]) cells[k] = { count: 0, recs: 0 };
+cells[k].recs += 1;
+cells[k].count += rowTotal(r);
+gtotal[gk] += rowTotal(r);
+});
+});
+gorder.sort(function (a, b) { return gtotal[b] - gtotal[a]; });
+return { grabs: gorder, cells: cells };
+}
+/* マップを出すのは「選べるマスが2つ以上ある」とき。グラブが1種類（＝未入力）でも、
+   スピードが2種類以上あればスピード別に絞り込める。マスが1つの技だけ出さない。
+   （当初は「グラブが2種類以上」にしていたが、それだとグラブ未入力の技でスピード別が
+     見られなくなる、と岳穂コーチから指摘があり変更した） */
+function shouldShowPracticeMap(map) { return Object.keys(map.cells).length >= 2; }
+
+function practiceMapHtml(map) {
+var head = '<tr><th class="rh"></th>' + SPEED_LEVELS.map(function (lv) {
+return "<th>" + escHtml(tr(lv.label)) + "</th>"; }).join("") + "</tr>";
+var body = map.grabs.map(function (gk) {
+var tds = SPEED_LEVELS.map(function (lv) {
+var c = map.cells[gk + "@" + lv.key];
+if (!c) return '<td class="pmap-none"><span>—</span></td>';
+var cls = "pmap-cell"
++ (c.count < ANALYZE_FEW_REPS ? " pmap-few" : "")
++ ((gk === S.dashAnalyzeGrab && lv.key === S.dashAnalyzeSpeed) ? " pmap-sel" : "");
+return '<td class="' + cls + '" onclick="selectAnalyzeCell(\'' + encodeURIComponent(gk) + "','" + lv.key + '\')">'
++ c.count + tr("本") + '<span class="pmap-rec">' + tr("{n}記録", { n: c.recs }) + "</span></td>";
+}).join("");
+return '<tr><th class="rh">' + escHtml(grabVariantLabelFromKey(gk)) + "</th>" + tds + "</tr>";
+}).join("");
+return '<div class="analyze-sec-title">' + tr("練習量マップ（グラブ × 進入スピード）") + "</div>"
++ '<div class="analyze-note">' + escHtml(tr("上段＝本数、下段＝記録数。「—」はまだ記録がない条件です。")) + "<br>"
++ escHtml(tr("マスをタップすると、その条件だけに絞った内訳が下に出ます。")) + "</div>"
++ '<table class="pmap">' + head + body + "</table>"
++ '<div class="pmap-legend"><span>' + tr("数字＝本数／記録数") + "</span>"
++ '<span style="color:#FFB870">' + tr("琥珀の記録数＝{n}本未満（データ少）", { n: ANALYZE_FEW_REPS }) + "</span>"
++ "<span>" + tr("—＝まだやっていない条件") + "</span></div>";
+}
+
+/* 選択中の条件で行を絞る。grab/speed が null なら技全体。 */
+function analyzeRowsFor(entries, trickKey, selGrab, selSpeed) {
+var rows = [], days = {};
+entries.forEach(function (e) {
+e.rows.forEach(function (r) {
+if (trickKeyOf(r) !== trickKey) return;
+if (selGrab && grabVariantKeyOf(r) !== selGrab) return;
+if (selSpeed && (r.speedLevel || "normal") !== selSpeed) return;
+rows.push(r); days[e.date] = 1;
+});
+});
+return { rows: rows, days: Object.keys(days).length };
+}
+function aggFromRows(rows) {
+var o = { count: 0, success: 0, fail: 0, yure: 0 };
+rows.forEach(function (r) {
+var s = rowSuccess(r);
+o.count += rowTotal(r);
+if (s !== null) o.success += s;
+o.fail += rowFail(r);
+o.yure += rowYure(r);
+});
+return o;
+}
+/* ヨレのタグ別。count は「そのタグが付いた記録の数」＝回数であり、本数(reps)ではない。
+   結果が「ヨレ」の記録だけを数える（コーチ確認済み）。 */
+function wobbleTagsFromRows(rows) {
+var map = {};
+WOBBLE_TAGS.forEach(function (t) { map[t] = { tag: t, count: 0, low: 0, high: 0, unknown: 0 }; });
+rows.forEach(function (r) {
+if (r.result !== "yure") return;
+(r.wobbleDetail || []).forEach(function (w) {
+var m = map[w.tag];
+if (!m) return;
+m.count += 1;
+var sev = Number(w.severity) || 0;
+if (sev >= 3) m.high += 1;
+else if (sev >= 1) m.low += 1;
+else m.unknown += 1;
+});
+});
+return WOBBLE_TAGS.map(function (t) { return map[t]; })
+.filter(function (m) { return m.count > 0; })
+.sort(function (a, b) { return b.count - a.count; });
+}
+
+function openTrickAnalyze(key) { S.dashAnalyzeTrick = decodeURIComponent(key); S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; render(); }
+function closeTrickAnalyze() { S.dashAnalyzeTrick = null; S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; render(); }
+function selectAnalyzeCell(grabKey, speedKey) {
+var gk = decodeURIComponent(grabKey);
+if (S.dashAnalyzeGrab === gk && S.dashAnalyzeSpeed === speedKey) { clearAnalyzeCell(); return; }
+S.dashAnalyzeGrab = gk; S.dashAnalyzeSpeed = speedKey; render();
+}
+function clearAnalyzeCell() { S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; render(); }
 
 function speedTotalsAggregate(totals) {
 var agg = {};
@@ -2490,7 +2630,7 @@ return pills + addHtml;
 }
 function toggleDashRecentExpanded() { S.dashRecentExpanded = !S.dashRecentExpanded; render(); }
 /* ---- ダッシュボード全体（統計・ランキング・スピード内訳・推移・直近の記録）にかける期間フィルター。直近の記録リストは以前は独自のレンジ切替を持っていたが、この期間フィルターに統一した。 ---- */
-function setDashPeriod(period) { S.dashPeriod = period; render(); }
+function setDashPeriod(period) { S.dashPeriod = period; S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; render(); }
 function dashPeriodLabel(period) { if (period === "30d") return tr("直近30日"); if (period === "season") return tr("今シーズン"); return tr("全期間"); }
 function dashSeasonStart() { var now = new Date(); var year = now.getMonth() >= 4 ? now.getFullYear() : now.getFullYear() - 1; return new Date(year, 4, 1); } // シーズンは5月開始と仮定(要調整可)
 function isInDashPeriod(dateStr, period) {
@@ -2911,8 +3051,8 @@ body +
 "</div>"
 );
 }
-function setDashAthlete(id) { S.dashAthlete = id; S.dashAnalyzeTrick = null; if (id !== "team") touchRecentAthlete(id); S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; S.dashRecentExpanded = false; render(); }
-function setDashCategory(c) { S.dashCategory = c; S.dashAnalyzeTrick = null; S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; S.dashRecentExpanded = false; render(); }
+function setDashAthlete(id) { S.dashAthlete = id; S.dashAnalyzeTrick = null; S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; if (id !== "team") touchRecentAthlete(id); S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; S.dashRecentExpanded = false; render(); }
+function setDashCategory(c) { S.dashCategory = c; S.dashAnalyzeTrick = null; S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; S.editingEntryId = null; S.editDraft = null; S.confirmDeleteId = null; S.videoFilterTrick = "all"; S.dashBestTimeExpanded = false; S.dashRecentExpanded = false; render(); }
 function toggleBestTimeExpand() { S.dashBestTimeExpanded = !S.dashBestTimeExpanded; render(); }
 function setVideoFilterTrick(v) { S.videoFilterTrick = v; render(); }
 
@@ -3600,52 +3740,92 @@ var open = !!key && S.dashAthlete !== "team" && S.dashCategory === "water";
 var inner = "";
 if (open) {
 var entries = dashAnalyzeEntries();
-var head = trickHeadTotals(entries, key);
-var vars = grabVariantTotals(entries, key);
-var tags = wobbleTagTotals(entries, key);
-var maxV = vars.reduce(function (m, v) { return Math.max(m, v.count); }, 1);
-var maxT = tags.reduce(function (m, t) { return Math.max(m, t.count); }, 1);
+var map = practiceMap(entries, key);
+var hasMap = shouldShowPracticeMap(map);
+if (!hasMap && (S.dashAnalyzeGrab || S.dashAnalyzeSpeed)) { S.dashAnalyzeGrab = null; S.dashAnalyzeSpeed = null; }
+var selected = !!(S.dashAnalyzeGrab && S.dashAnalyzeSpeed);
 
-var subLine = head.count > 0
-? (escHtml(athleteName(S.dashAthlete)) + " ・ " + escHtml(dashPeriodLabel(S.dashPeriod)) + " ／ " + head.count + tr("本") + " ・ " + rankCountLabel(head))
+var all = analyzeRowsFor(entries, key, null, null);
+var allAgg = aggFromRows(all.rows);
+var f = selected ? analyzeRowsFor(entries, key, S.dashAnalyzeGrab, S.dashAnalyzeSpeed) : all;
+var agg = selected ? aggFromRows(f.rows) : allAgg;
+
+var subLine = allAgg.count > 0
+? (escHtml(athleteName(S.dashAthlete)) + " ・ " + escHtml(dashPeriodLabel(S.dashPeriod)) + " ／ " + allAgg.count + tr("本") + " ・ " + rankCountLabel(allAgg))
 : escHtml(tr("この期間の記録がありません。"));
 
+/* --- 練習量マップ --- */
+var mapHtml = hasMap ? practiceMapHtml(map)
+: (all.rows.length ? ('<div class="analyze-note" style="margin-top:10px;">' + escHtml(tr("この技は記録がある条件が1つだけなので、練習量マップは表示していません。")) + "</div>") : "");
+
+/* --- 絞り込み中のピル --- */
+var pillHtml = selected
+? ('<div class="analyze-pill-row"><span class="analyze-pill" onclick="clearAnalyzeCell()" title="' + escAttr(tr("絞り込みを解除")) + '">'
++ escHtml(grabVariantLabelFromKey(S.dashAnalyzeGrab)) + " × " + escHtml(speedShortLabel(S.dashAnalyzeSpeed))
++ ' <span class="analyze-pill-x">✕</span></span></div>'
++ '<div class="analyze-sub" style="margin-bottom:10px;">'
++ escHtml(tr("{c}本 ・ {r}記録 ・ {d}日間", { c: agg.count, r: f.rows.length, d: f.days })) + "</div>")
+: "";
+
+/* --- 中段：選択中は「結果の内訳」、未選択は従来の「グラブ・ポジション別」 --- */
+var midHtml;
+if (selected) {
+midHtml = '<div class="analyze-sec-title" style="margin-top:4px;">' + tr("結果の内訳") + "</div>"
++ speedLegendHtml()
++ '<div class="av-row"><span class="av-name">' + tr("この条件") + '</span><div class="av-bar">' + rankSegBarHtml(agg, 100) + "</div>"
++ '<span class="av-num">' + escHtml(rankCountLabel(agg)) + "</span></div>"
++ '<div class="av-row"><span class="av-name" style="color:#5C7086;">' + tr("技の全体") + "</span>"
++ '<div class="av-bar" style="opacity:.45;">' + rankSegBarHtml(allAgg, 100) + "</div>"
++ '<span class="av-num av-muted">' + escHtml(rankCountLabel(allAgg)) + "</span></div>"
++ '<div class="analyze-note" style="margin-top:7px;">' + escHtml(tr("同じ技の全体と並べているので、この条件が得意か苦手かがその場で分かります。")) + "</div>";
+} else {
+var vars = grabVariantTotals(entries, key);
+var maxV = vars.reduce(function (m, v) { return Math.max(m, v.count); }, 1);
 var varsHtml = vars.length ? vars.map(function (v) {
 var pct = v.count > 0 ? Math.max(Math.round((v.count / maxV) * 100), 3) : 0;
 var numLabel = v.count > 0
 ? (rankCountLabel(v) + " " + v.count + tr("本"))
 : (tr("本数の入力なし") + " " + tr("({n}件)", { n: v.rows }));
-return '<div class="av-row"><span class="av-name">' + escHtml(grabVariantLabel(v)) + '</span>' +
-'<div class="av-bar">' + rankSegBarHtml(v, pct) + "</div>" +
-'<span class="av-num">' + escHtml(numLabel) + "</span></div>";
+return '<div class="av-row"><span class="av-name">' + escHtml(grabVariantLabel(v)) + '</span>'
++ '<div class="av-bar">' + rankSegBarHtml(v, pct) + "</div>"
++ '<span class="av-num">' + escHtml(numLabel) + "</span></div>";
 }).join("") : ('<div class="analyze-empty">' + escHtml(tr("この期間の記録がありません。")) + "</div>");
+midHtml = '<div class="analyze-divider"></div>'
++ '<div class="analyze-sec-title">' + tr("グラブ・ポジション別") + "</div>"
++ '<div class="analyze-note">' + escHtml(tr("どの組み合わせが安定しているか。実際に記録がある組み合わせだけを本数順に表示します。")) + "<br>"
++ escHtml(tr("「（未選択）」はニア/レギュラーを入力していない記録です。")) + "</div>"
++ speedLegendHtml() + varsHtml;
+}
 
+/* --- ヨレのタグ別（選択中はその条件だけ） --- */
+var tags = wobbleTagsFromRows(f.rows);
+var maxT = tags.reduce(function (m, t) { return Math.max(m, t.count); }, 1);
 var tagsHtml = tags.length ? tags.map(function (t) {
 var pct = Math.max(Math.round((t.count / maxT) * 100), 3);
 var lowPct = t.count > 0 ? (t.low / t.count) * 100 : 0;
 var highPct = t.count > 0 ? (t.high / t.count) * 100 : 0;
 var unkPct = t.count > 0 ? (t.unknown / t.count) * 100 : 0;
-return '<div class="av-row"><span class="av-name">' + escHtml(tr(t.tag)) + '</span>' +
-'<div class="av-bar"><div style="width:' + pct + '%;height:100%;display:flex;">' +
-'<div style="width:' + lowPct + '%;background:#FFD1A3;"></div>' +
-'<div style="width:' + highPct + '%;background:#FF7A18;"></div>' +
-'<div style="width:' + unkPct + '%;background:#3A4B60;"></div>' +
-"</div></div>" +
-'<span class="av-num">' + escHtml(tr("{n}回", { n: t.count })) + ' <span class="av-muted">' + escHtml(tr("(浅{low} / 深{high})", { low: t.low, high: t.high })) + "</span></span></div>";
-}).join("") : ('<div class="analyze-empty">' + escHtml(tr("この技には、結果が「ヨレ」の記録がまだありません。")) + "</div>");
+return '<div class="av-row"><span class="av-name">' + escHtml(tr(t.tag)) + '</span>'
++ '<div class="av-bar"><div style="width:' + pct + '%;height:100%;display:flex;">'
++ '<div style="width:' + lowPct + '%;background:#FFD1A3;"></div>'
++ '<div style="width:' + highPct + '%;background:#FF7A18;"></div>'
++ '<div style="width:' + unkPct + '%;background:#3A4B60;"></div>'
++ "</div></div>"
++ '<span class="av-num">' + escHtml(tr("{n}回", { n: t.count })) + ' <span class="av-muted">' + escHtml(tr("(浅{low} / 深{high})", { low: t.low, high: t.high })) + "</span></span></div>";
+}).join("") : ('<div class="analyze-empty">' + escHtml(selected ? tr("この条件には、結果が「ヨレ」の記録がありません。") : tr("この技には、結果が「ヨレ」の記録がまだありません。")) + "</div>");
 
 inner =
-'<div class="analyze-header"><span>' + escHtml(key) + escHtml(tr("｜分析")) + '</span><button type="button" class="grab-modal-close" onclick="closeTrickAnalyze()">' + tr("閉じる") + "</button></div>" +
-'<div class="analyze-sub">' + subLine + "</div>" +
-'<div class="analyze-sec-title">' + tr("グラブ・ポジション別") + "</div>" +
-'<div class="analyze-note">' + escHtml(tr("どの組み合わせが安定しているか。実際に記録がある組み合わせだけを本数順に表示します。")) + "<br>" + escHtml(tr("「（未選択）」はニア/レギュラーを入力していない記録です。")) + "</div>" +
-speedLegendHtml() +
-varsHtml +
-'<div class="analyze-divider"></div>' +
-'<div class="analyze-sec-title">' + tr("ヨレの傾向（タグ別）") + "</div>" +
-'<div class="analyze-note">' + tr("単位は<b>回数</b>＝そのタグを付けた記録の数です。<b>本数とは別の単位</b>で、率や平均は出していません。") + "<br>" + escHtml(tr("結果が「ヨレ」の記録だけを数えています。")) + "</div>" +
-analyzeLegendYureHtml() +
-tagsHtml;
+'<div class="analyze-header"><span>' + escHtml(key) + escHtml(tr("｜分析")) + '</span><button type="button" class="grab-modal-close" onclick="closeTrickAnalyze()">' + tr("閉じる") + "</button></div>"
++ '<div class="analyze-sub">' + subLine + "</div>"
++ mapHtml
++ pillHtml
++ midHtml
++ '<div class="analyze-divider"></div>'
++ '<div class="analyze-sec-title">' + tr("ヨレの傾向（タグ別）") + "</div>"
++ '<div class="analyze-note">' + tr("単位は<b>回数</b>＝そのタグを付けた記録の数です。<b>本数とは別の単位</b>で、率や平均は出していません。") + "<br>"
++ escHtml(tr("結果が「ヨレ」の記録だけを数えています。")) + "</div>"
++ analyzeLegendYureHtml()
++ tagsHtml;
 }
 return '<div class="analyze-overlay' + (open ? " open" : "") + '" onclick="closeTrickAnalyze()">' +
 '<div class="analyze-sheet" onclick="event.stopPropagation()">' + inner + "</div></div>";
