@@ -314,6 +314,10 @@ var EN = {
 "手前": "Near",
 "奥": "Far",
 "その他": "Other",
+"雪上": "Snow",
+"1エア": "1st air",
+"2エア": "2nd air",
+"どのエア": "Which air",
 
 /* ---- 技のグループ ---- */
 "ストレートジャンプ": "Straight Jump",
@@ -1195,7 +1199,11 @@ var FACILITIES = [
 { name: "WJM", kickers: ["手前", "奥"] },
 { name: "K-air", kickers: ["モーグル台", "その他"] },
 { name: "テイネ", kickers: ["モーグル台", "その他"] },
+/* 雪上（コース上のエア）。台の代わりにコースのどちらのエアかを選ぶ。 */
+{ name: "雪上", kickers: ["1エア", "2エア", "その他"] },
 ];
+/* 雪上はコース上のエアなので「台のサイズ」という言い方が合わない。見出しだけ言い換える。 */
+function kickerFieldLabel(name) { return name === "雪上" ? tr("どのエア") : tr("台のサイズ"); }
 function kickersForFacility(name) {
 var f = FACILITIES.filter(function (x) { return x.name === name; })[0];
 return f ? f.kickers : [];
@@ -2029,7 +2037,7 @@ return (
 '<div><label class="field-label">' + tr("日付") + (S.date !== todayStr() ? ' <span style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;background:#2A1F0E;border:1px solid #6B4A1E;color:#FFB870;font-size:10px;font-weight:700;vertical-align:middle;">' + tr("⚠ 今日ではありません") + '</span>' : '') + '</label><input class="date-input" type="date" value="' + escAttr(S.date) + '" onchange="setDate(this.value)"></div>' +
 '<div><label class="field-label">' + tr("施設") + '</label><div class="select-wrap"><select class="select-input" onchange="selectFacility(this.value)">' + facilityOptions + "</select>" +
 '<span class="select-chevron">' + iconChevronDown(16, COLORS.textFaint) + "</span></div>" +
-'<div class="sub-label">' + tr("台のサイズ") + '</div><div class="chip-grid">' + kickerChips + "</div></div>" +
+'<div class="sub-label">' + kickerFieldLabel(S.facility) + '</div><div class="chip-grid">' + kickerChips + "</div></div>" +
 '<div><label class="field-label">' + tr("技ログ") + '</label><div class="tech-row-list">' + rowsHtml + "</div></div>" +
 '<div><label class="field-label">' + tr("メモ(任意)") + '</label><textarea class="note-textarea" rows="2" placeholder="' + escAttr(tr("感覚、風向き、恐怖心など")) + '" oninput="setNote(this.value)">' + escHtml(S.note) + '</textarea></div>' +
 (S.bgUpload ? '<div class="save-note">' + tr("🎬 動画をアップロード中…") + ' (' + S.bgUpload.done + '/' + S.bgUpload.total + ')</div>' : "") +
@@ -3296,7 +3304,7 @@ return (
 '<div style="font-size:12px;color:' + COLORS.textFaint + ';">' + tr("記録を編集") + '</div>' +
 '<div><label class="field-label">' + tr("日付") + '</label><input class="date-input" type="date" value="' + escAttr(S.editDraft.date) + '" onchange="setEditDate(this.value)"></div>' +
 (isWater
-? '<div><label class="field-label">' + tr("施設") + '</label><div class="select-wrap"><select class="select-input" onchange="setEditFacility(this.value)">' + facilityOptions + "</select><span class=\"select-chevron\">" + iconChevronDown(16, COLORS.textFaint) + "</span></div><div class=\"sub-label\">" + tr("台のサイズ") + "</div><div class=\"chip-grid\">" + kickerChips + "</div></div>"
+? '<div><label class="field-label">' + tr("施設") + '</label><div class="select-wrap"><select class="select-input" onchange="setEditFacility(this.value)">' + facilityOptions + "</select><span class=\"select-chevron\">" + iconChevronDown(16, COLORS.textFaint) + "</span></div><div class=\"sub-label\">" + kickerFieldLabel(S.editDraft.facility) + "</div><div class=\"chip-grid\">" + kickerChips + "</div></div>"
 : "") +
 '<div><label class="field-label">' + tr("技ログ") + '</label><div class="tech-row-list">' + rowsHtml + "</div>" +
 '<button class="add-row-btn" onclick="addEditRow(\'' + category + '\')">' + iconPlus(14, COLORS.ice) + tr(" 技を追加") + "</button></div>" +
